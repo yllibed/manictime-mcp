@@ -11,7 +11,7 @@ internal sealed class StubActivityRepository(IReadOnlyList<ActivityDto>? activit
 		long timelineId, string startLocalTime, string endLocalTime, int? limit = null,
 		CancellationToken cancellationToken = default) =>
 		Task.FromResult<IReadOnlyList<ActivityDto>>(
-			_activities.Where(a => a.TimelineId == timelineId).ToList());
+			_activities.Where(a => a.ReportId == timelineId).ToList());
 
 	public Task<IReadOnlyList<GroupDto>> GetGroupsAsync(long timelineId, CancellationToken cancellationToken = default) =>
 		Task.FromResult<IReadOnlyList<GroupDto>>([]);

@@ -115,9 +115,9 @@ public sealed class SchemaValidatorTests
 	}
 
 	[TestMethod]
-	public void Validate_MissingParentGroupIdColumn_ReturnsInvalid()
+	public void Validate_MissingNameColumn_ReturnsInvalid()
 	{
-		using var fixture = FixtureDatabase.CreateWithMissingColumn("Ar_Group", "ParentGroupId");
+		using var fixture = FixtureDatabase.CreateWithMissingColumn("Ar_Group", "Name");
 		var sut = CreateValidator();
 
 		var result = sut.Validate(fixture.FilePath);
@@ -125,7 +125,7 @@ public sealed class SchemaValidatorTests
 		result.Status.Should().Be(SchemaValidationStatus.Invalid);
 		result.Issues.Should().Contain(i =>
 			i.Code == IssueCode.SchemaValidationFailed &&
-			i.Message.Contains("ParentGroupId"));
+			i.Message.Contains("Name"));
 	}
 
 	#endregion

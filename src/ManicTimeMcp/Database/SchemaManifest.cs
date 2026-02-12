@@ -21,11 +21,11 @@ public static class SchemaManifest
 
 			["Ar_Activity"] = new(
 				"Ar_Activity",
-				["ActivityId", "TimelineId", "StartLocalTime", "EndLocalTime", "DisplayName", "GroupId"]),
+				["ActivityId", "ReportId", "StartLocalTime", "EndLocalTime", "Name", "GroupId"]),
 
 			["Ar_Group"] = new(
 				"Ar_Group",
-				["GroupId", "TimelineId", "DisplayName", "ParentGroupId"]),
+				["GroupId", "ReportId", "Name"]),
 		};
 
 		return tables.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);

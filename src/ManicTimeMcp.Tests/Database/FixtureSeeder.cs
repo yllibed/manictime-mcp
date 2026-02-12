@@ -15,44 +15,44 @@ internal static class FixtureSeeder
 		InsertTimeline(connection, reportId: 4, schemaName: "ManicTime/Tags", baseSchemaName: "ManicTime/Tags");
 
 		// Groups for Applications timeline
-		InsertGroup(connection, groupId: 1, timelineId: 2, displayName: "Visual Studio", parentGroupId: null);
-		InsertGroup(connection, groupId: 2, timelineId: 2, displayName: "Chrome", parentGroupId: null);
-		InsertGroup(connection, groupId: 3, timelineId: 2, displayName: "Terminal", parentGroupId: null);
+		InsertGroup(connection, groupId: 1, reportId: 2, name: "Visual Studio");
+		InsertGroup(connection, groupId: 2, reportId: 2, name: "Chrome");
+		InsertGroup(connection, groupId: 3, reportId: 2, name: "Terminal");
 
 		// Groups for Documents timeline
-		InsertGroup(connection, groupId: 4, timelineId: 3, displayName: "Project.sln", parentGroupId: null);
+		InsertGroup(connection, groupId: 4, reportId: 3, name: "Project.sln");
 
 		// Activities for Computer Usage
-		InsertActivity(connection, activityId: 1, timelineId: 1,
+		InsertActivity(connection, activityId: 1, reportId: 1,
 			start: "2025-01-15 08:00:00", end: "2025-01-15 12:00:00",
-			displayName: "Using Computer", groupId: null);
-		InsertActivity(connection, activityId: 2, timelineId: 1,
+			name: "Using Computer", groupId: null);
+		InsertActivity(connection, activityId: 2, reportId: 1,
 			start: "2025-01-15 13:00:00", end: "2025-01-15 17:30:00",
-			displayName: "Using Computer", groupId: null);
+			name: "Using Computer", groupId: null);
 
 		// Activities for Applications
-		InsertActivity(connection, activityId: 3, timelineId: 2,
+		InsertActivity(connection, activityId: 3, reportId: 2,
 			start: "2025-01-15 08:00:00", end: "2025-01-15 10:00:00",
-			displayName: "devenv.exe", groupId: 1);
-		InsertActivity(connection, activityId: 4, timelineId: 2,
+			name: "devenv.exe", groupId: 1);
+		InsertActivity(connection, activityId: 4, reportId: 2,
 			start: "2025-01-15 10:00:00", end: "2025-01-15 11:30:00",
-			displayName: "chrome.exe", groupId: 2);
-		InsertActivity(connection, activityId: 5, timelineId: 2,
+			name: "chrome.exe", groupId: 2);
+		InsertActivity(connection, activityId: 5, reportId: 2,
 			start: "2025-01-15 11:30:00", end: "2025-01-15 12:00:00",
-			displayName: "WindowsTerminal.exe", groupId: 3);
-		InsertActivity(connection, activityId: 6, timelineId: 2,
+			name: "WindowsTerminal.exe", groupId: 3);
+		InsertActivity(connection, activityId: 6, reportId: 2,
 			start: "2025-01-15 13:00:00", end: "2025-01-15 17:30:00",
-			displayName: "devenv.exe", groupId: 1);
+			name: "devenv.exe", groupId: 1);
 
 		// Activities for Documents
-		InsertActivity(connection, activityId: 7, timelineId: 3,
+		InsertActivity(connection, activityId: 7, reportId: 3,
 			start: "2025-01-15 08:00:00", end: "2025-01-15 12:00:00",
-			displayName: "Program.cs", groupId: 4);
+			name: "Program.cs", groupId: 4);
 
-		// Activities with null display name and group
-		InsertActivity(connection, activityId: 8, timelineId: 1,
+		// Activities with null name and group
+		InsertActivity(connection, activityId: 8, reportId: 1,
 			start: "2025-01-15 12:00:00", end: "2025-01-15 13:00:00",
-			displayName: null, groupId: null);
+			name: null, groupId: null);
 	}
 
 	private static void InsertTimeline(SqliteConnection connection, long reportId, string schemaName, string baseSchemaName)
@@ -65,26 +65,25 @@ internal static class FixtureSeeder
 		command.ExecuteNonQuery();
 	}
 
-	private static void InsertGroup(SqliteConnection connection, long groupId, long timelineId, string displayName, long? parentGroupId)
+	private static void InsertGroup(SqliteConnection connection, long groupId, long reportId, string name)
 	{
 		using var command = connection.CreateCommand();
-		command.CommandText = "INSERT INTO Ar_Group (GroupId, TimelineId, DisplayName, ParentGroupId) VALUES (@id, @timeline, @name, @parent)";
+		command.CommandText = "INSERT INTO Ar_Group (GroupId, ReportId, Name) VALUES (@id, @report, @name)";
 		command.Parameters.AddWithValue("@id", groupId);
-		command.Parameters.AddWithValue("@timeline", timelineId);
-		command.Parameters.AddWithValue("@name", displayName);
-		command.Parameters.AddWithValue("@parent", parentGroupId.HasValue ? parentGroupId.Value : DBNull.Value);
+		command.Parameters.AddWithValue("@report", reportId);
+		command.Parameters.AddWithValue("@name", name);
 		command.ExecuteNonQuery();
 	}
 
-	private static void InsertActivity(SqliteConnection connection, long activityId, long timelineId, string start, string end, string? displayName, long? groupId)
+	private static void InsertActivity(SqliteConnection connection, long activityId, long reportId, string start, string end, string? name, long? groupId)
 	{
 		using var command = connection.CreateCommand();
-		command.CommandText = "INSERT INTO Ar_Activity (ActivityId, TimelineId, StartLocalTime, EndLocalTime, DisplayName, GroupId) VALUES (@id, @timeline, @start, @end, @name, @group)";
+		command.CommandText = "INSERT INTO Ar_Activity (ActivityId, ReportId, StartLocalTime, EndLocalTime, Name, GroupId) VALUES (@id, @report, @start, @end, @name, @group)";
 		command.Parameters.AddWithValue("@id", activityId);
-		command.Parameters.AddWithValue("@timeline", timelineId);
+		command.Parameters.AddWithValue("@report", reportId);
 		command.Parameters.AddWithValue("@start", start);
 		command.Parameters.AddWithValue("@end", end);
-		command.Parameters.AddWithValue("@name", displayName is not null ? displayName : DBNull.Value);
+		command.Parameters.AddWithValue("@name", name is not null ? name : DBNull.Value);
 		command.Parameters.AddWithValue("@group", groupId.HasValue ? groupId.Value : DBNull.Value);
 		command.ExecuteNonQuery();
 	}

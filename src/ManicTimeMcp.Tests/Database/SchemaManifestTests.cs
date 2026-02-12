@@ -28,10 +28,10 @@ public sealed class SchemaManifestTests
 		SchemaManifest.Tables.Should().ContainKey("Ar_Activity");
 		SchemaManifest.Tables["Ar_Activity"].RequiredColumns.Should()
 			.Contain("ActivityId")
-			.And.Contain("TimelineId")
+			.And.Contain("ReportId")
 			.And.Contain("StartLocalTime")
 			.And.Contain("EndLocalTime")
-			.And.Contain("DisplayName")
+			.And.Contain("Name")
 			.And.Contain("GroupId");
 	}
 
@@ -41,9 +41,8 @@ public sealed class SchemaManifestTests
 		SchemaManifest.Tables.Should().ContainKey("Ar_Group");
 		SchemaManifest.Tables["Ar_Group"].RequiredColumns.Should()
 			.Contain("GroupId")
-			.And.Contain("TimelineId")
-			.And.Contain("DisplayName")
-			.And.Contain("ParentGroupId");
+			.And.Contain("ReportId")
+			.And.Contain("Name");
 	}
 
 	[TestMethod]

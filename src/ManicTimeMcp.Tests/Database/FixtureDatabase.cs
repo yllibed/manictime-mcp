@@ -151,12 +151,12 @@ internal sealed class FixtureDatabase : IDisposable
 		Execute(connection, """
 			CREATE TABLE Ar_Activity (
 				ActivityId INTEGER PRIMARY KEY,
-				TimelineId INTEGER NOT NULL,
+				ReportId INTEGER NOT NULL,
 				StartLocalTime TEXT NOT NULL,
 				EndLocalTime TEXT NOT NULL,
-				DisplayName TEXT,
+				Name TEXT,
 				GroupId INTEGER,
-				FOREIGN KEY (TimelineId) REFERENCES Ar_Timeline(ReportId)
+				FOREIGN KEY (ReportId) REFERENCES Ar_Timeline(ReportId)
 			)
 			""");
 	}
@@ -166,10 +166,9 @@ internal sealed class FixtureDatabase : IDisposable
 		Execute(connection, """
 			CREATE TABLE Ar_Group (
 				GroupId INTEGER PRIMARY KEY,
-				TimelineId INTEGER NOT NULL,
-				DisplayName TEXT NOT NULL,
-				ParentGroupId INTEGER,
-				FOREIGN KEY (TimelineId) REFERENCES Ar_Timeline(ReportId)
+				ReportId INTEGER NOT NULL,
+				Name TEXT NOT NULL,
+				FOREIGN KEY (ReportId) REFERENCES Ar_Timeline(ReportId)
 			)
 			""");
 	}
@@ -186,10 +185,10 @@ internal sealed class FixtureDatabase : IDisposable
 		var columns = new List<string>
 		{
 			"ActivityId INTEGER PRIMARY KEY",
-			"TimelineId INTEGER NOT NULL",
+			"ReportId INTEGER NOT NULL",
 			"StartLocalTime TEXT NOT NULL",
 			"EndLocalTime TEXT NOT NULL",
-			"DisplayName TEXT",
+			"Name TEXT",
 			"GroupId INTEGER",
 		};
 		columns.RemoveAll(c => c.StartsWith(columnToOmit, StringComparison.OrdinalIgnoreCase));
@@ -201,9 +200,8 @@ internal sealed class FixtureDatabase : IDisposable
 		var columns = new List<string>
 		{
 			"GroupId INTEGER PRIMARY KEY",
-			"TimelineId INTEGER NOT NULL",
-			"DisplayName TEXT NOT NULL",
-			"ParentGroupId INTEGER",
+			"ReportId INTEGER NOT NULL",
+			"Name TEXT NOT NULL",
 		};
 		columns.RemoveAll(c => c.StartsWith(columnToOmit, StringComparison.OrdinalIgnoreCase));
 		Execute(connection, $"CREATE TABLE Ar_Group ({string.Join(", ", columns)})");

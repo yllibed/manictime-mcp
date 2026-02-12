@@ -35,9 +35,9 @@ public sealed class ActivityRepository : IActivityRepository
 				using var connection = _connectionFactory.CreateConnection();
 				using var command = connection.CreateCommand();
 				command.CommandText = """
-					SELECT ActivityId, TimelineId, StartLocalTime, EndLocalTime, DisplayName, GroupId
+					SELECT ActivityId, ReportId, StartLocalTime, EndLocalTime, Name, GroupId
 					FROM Ar_Activity
-					WHERE TimelineId = @timelineId
+					WHERE ReportId = @timelineId
 					  AND StartLocalTime < @endLocalTime
 					  AND EndLocalTime > @startLocalTime
 					ORDER BY StartLocalTime
@@ -55,10 +55,10 @@ public sealed class ActivityRepository : IActivityRepository
 					results.Add(new ActivityDto
 					{
 						ActivityId = reader.GetInt64(0),
-						TimelineId = reader.GetInt64(1),
+						ReportId = reader.GetInt64(1),
 						StartLocalTime = reader.GetString(2),
 						EndLocalTime = reader.GetString(3),
-						DisplayName = await reader.IsDBNullAsync(4, ct).ConfigureAwait(false) ? null : reader.GetString(4),
+						Name = await reader.IsDBNullAsync(4, ct).ConfigureAwait(false) ? null : reader.GetString(4),
 						GroupId = await reader.IsDBNullAsync(5, ct).ConfigureAwait(false) ? null : reader.GetInt64(5),
 					});
 				}
@@ -81,9 +81,9 @@ public sealed class ActivityRepository : IActivityRepository
 				using var connection = _connectionFactory.CreateConnection();
 				using var command = connection.CreateCommand();
 				command.CommandText = """
-					SELECT GroupId, TimelineId, DisplayName, ParentGroupId
+					SELECT GroupId, ReportId, Name
 					FROM Ar_Group
-					WHERE TimelineId = @timelineId
+					WHERE ReportId = @timelineId
 					ORDER BY GroupId
 					LIMIT @limit
 					""";
@@ -97,9 +97,8 @@ public sealed class ActivityRepository : IActivityRepository
 					results.Add(new GroupDto
 					{
 						GroupId = reader.GetInt64(0),
-						TimelineId = reader.GetInt64(1),
-						DisplayName = reader.GetString(2),
-						ParentGroupId = await reader.IsDBNullAsync(3, ct).ConfigureAwait(false) ? null : reader.GetInt64(3),
+						ReportId = reader.GetInt64(1),
+						Name = reader.GetString(2),
 					});
 				}
 

@@ -76,19 +76,19 @@ public sealed class ActivityRepositoryTests
 	#region GetActivitiesAsync — null handling
 
 	[TestMethod]
-	public async Task GetActivitiesAsync_NullDisplayNameAndGroupId_MappedCorrectly()
+	public async Task GetActivitiesAsync_NullNameAndGroupId_MappedCorrectly()
 	{
 		using var fixture = FixtureDatabase.CreateStandard(FixtureSeeder.SeedStandardData);
 		var sut = CreateRepository(fixture);
 
-		// Activity 8 on timeline 1 has null DisplayName and GroupId (12:00-13:00)
+		// Activity 8 on timeline 1 has null Name and GroupId (12:00-13:00)
 		var activities = await sut.GetActivitiesAsync(
 			timelineId: 1,
 			startLocalTime: "2025-01-15 12:00:00",
 			endLocalTime: "2025-01-15 12:59:00").ConfigureAwait(false);
 
 		var nullActivity = activities.Should().ContainSingle().Which;
-		nullActivity.DisplayName.Should().BeNull();
+		nullActivity.Name.Should().BeNull();
 		nullActivity.GroupId.Should().BeNull();
 	}
 
@@ -161,9 +161,9 @@ public sealed class ActivityRepositoryTests
 		var groups = await sut.GetGroupsAsync(timelineId: 2).ConfigureAwait(false);
 
 		groups.Count.Should().Be(3);
-		groups.Should().Contain(g => g.DisplayName == "Visual Studio");
-		groups.Should().Contain(g => g.DisplayName == "Chrome");
-		groups.Should().Contain(g => g.DisplayName == "Terminal");
+		groups.Should().Contain(g => g.Name == "Visual Studio");
+		groups.Should().Contain(g => g.Name == "Chrome");
+		groups.Should().Contain(g => g.Name == "Terminal");
 	}
 
 	[TestMethod]
@@ -174,18 +174,7 @@ public sealed class ActivityRepositoryTests
 
 		var groups = await sut.GetGroupsAsync(timelineId: 3).ConfigureAwait(false);
 
-		groups.Should().ContainSingle().Which.DisplayName.Should().Be("Project.sln");
-	}
-
-	[TestMethod]
-	public async Task GetGroupsAsync_NullParentGroupId_MappedCorrectly()
-	{
-		using var fixture = FixtureDatabase.CreateStandard(FixtureSeeder.SeedStandardData);
-		var sut = CreateRepository(fixture);
-
-		var groups = await sut.GetGroupsAsync(timelineId: 2).ConfigureAwait(false);
-
-		groups.Should().OnlyContain(g => g.ParentGroupId == null);
+		groups.Should().ContainSingle().Which.Name.Should().Be("Project.sln");
 	}
 
 	[TestMethod]

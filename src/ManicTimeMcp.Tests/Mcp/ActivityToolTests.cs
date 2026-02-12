@@ -21,9 +21,9 @@ public sealed class ActivityToolTests
 
 	private static readonly ActivityDto[] SampleActivities =
 	[
-		new() { ActivityId = 1, TimelineId = 1, StartLocalTime = "2025-01-15 08:00:00", EndLocalTime = "2025-01-15 09:00:00", DisplayName = "VS Code", GroupId = null },
-		new() { ActivityId = 2, TimelineId = 1, StartLocalTime = "2025-01-15 09:00:00", EndLocalTime = "2025-01-15 10:00:00", DisplayName = "Chrome", GroupId = null },
-		new() { ActivityId = 3, TimelineId = 2, StartLocalTime = "2025-01-15 08:00:00", EndLocalTime = "2025-01-15 12:00:00", DisplayName = "On", GroupId = null },
+		new() { ActivityId = 1, ReportId = 1, StartLocalTime = "2025-01-15 08:00:00", EndLocalTime = "2025-01-15 09:00:00", Name = "VS Code", GroupId = null },
+		new() { ActivityId = 2, ReportId = 1, StartLocalTime = "2025-01-15 09:00:00", EndLocalTime = "2025-01-15 10:00:00", Name = "Chrome", GroupId = null },
+		new() { ActivityId = 3, ReportId = 2, StartLocalTime = "2025-01-15 08:00:00", EndLocalTime = "2025-01-15 12:00:00", Name = "On", GroupId = null },
 	];
 
 	private static McpTestHarness CreateHarness()
