@@ -1,0 +1,16 @@
+<Project Sdk="MSTest.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<GenerateDocumentationFile>false</GenerateDocumentationFile>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="AwesomeAssertions" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\ManicTimeMcp\ManicTimeMcp.csproj" />
+	</ItemGroup>
+
+</Project>

@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net10.0</TargetFramework>
+		<AssemblyName>ManicTimeMcp</AssemblyName>
+		<RootNamespace>ManicTimeMcp</RootNamespace>
+	</PropertyGroup>
+
+	<!-- Packaging profile (WS-02) -->
+	<PropertyGroup>
+		<PackAsTool>true</PackAsTool>
+		<ToolCommandName>manictime-mcp</ToolCommandName>
+		<PackageType>McpServer</PackageType>
+		<PackageId>ManicTimeMcp</PackageId>
+		<Description>MCP server for read-only access to local ManicTime activity data.</Description>
+		<Authors>ManicTime MCP Contributors</Authors>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageTags>mcp;manictime;productivity;time-tracking</PackageTags>
+		<RepositoryType>git</RepositoryType>
+	</PropertyGroup>
+
+	<!-- Publish profile (WS-02) -->
+	<PropertyGroup>
+		<RuntimeIdentifiers>win-x64;win-arm64;any</RuntimeIdentifiers>
+		<ToolPackageRuntimeIdentifiers>win-x64;win-arm64;any</ToolPackageRuntimeIdentifiers>
+		<PublishSelfContained>true</PublishSelfContained>
+		<PublishSingleFile>true</PublishSingleFile>
+		<PublishReadyToRun>true</PublishReadyToRun>
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<PublishTrimmed>false</PublishTrimmed>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="..\..\README.md" Pack="true" PackagePath="\" Link="README.md" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="ManicTimeMcp.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="ModelContextProtocol" />
+		<PackageReference Include="Microsoft.Data.Sqlite" />
+		<PackageReference Include="Microsoft.Extensions.Hosting" />
+	</ItemGroup>
+
+</Project>
