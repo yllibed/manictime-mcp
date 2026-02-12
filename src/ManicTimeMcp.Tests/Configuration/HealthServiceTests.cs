@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using ManicTimeMcp.Configuration;
+using ManicTimeMcp.Database;
 using ManicTimeMcp.Models;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -85,7 +86,7 @@ public sealed class HealthServiceTests
 		report.DirectorySource.Should().Be(DataDirectorySource.EnvironmentVariable);
 		report.DatabaseExists.Should().BeTrue();
 		report.DatabaseSizeBytes.Should().Be(1024 * 1024);
-		report.SchemaStatus.Should().Be(SchemaValidationStatus.NotChecked);
+		report.SchemaStatus.Should().Be(SchemaValidationStatus.Valid);
 		report.ManicTimeProcessRunning.Should().BeTrue();
 		report.Screenshots.Status.Should().Be(ScreenshotAvailabilityStatus.Available);
 		report.Screenshots.Reason.Should().Be(ScreenshotUnavailableReason.None);
@@ -249,8 +250,19 @@ public sealed class HealthServiceTests
 
 	#region Helpers
 
-	private static HealthService CreateService(IDataDirectoryResolver resolver, IPlatformEnvironment platform) =>
-		new(resolver, platform, NullLogger<HealthService>.Instance);
+	private static HealthService CreateService(IDataDirectoryResolver resolver, IPlatformEnvironment platform, ISchemaValidator? schemaValidator = null) =>
+		new(resolver, platform, schemaValidator ?? new StubSchemaValidator(), NullLogger<HealthService>.Instance);
+
+	private sealed class StubSchemaValidator : ISchemaValidator
+	{
+		public SchemaValidationResult Result { get; set; } = new()
+		{
+			Status = SchemaValidationStatus.Valid,
+			Issues = [],
+		};
+
+		public SchemaValidationResult Validate(string databasePath) => Result;
+	}
 
 	private sealed class StubResolver(string? path, DataDirectorySource source) : IDataDirectoryResolver
 	{

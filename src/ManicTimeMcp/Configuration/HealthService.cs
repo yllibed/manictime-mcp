@@ -1,3 +1,4 @@
+using ManicTimeMcp.Database;
 using ManicTimeMcp.Models;
 using Microsoft.Extensions.Logging;
 
@@ -17,16 +18,19 @@ public sealed class HealthService : IHealthService
 
 	private readonly IDataDirectoryResolver _resolver;
 	private readonly IPlatformEnvironment _platform;
+	private readonly ISchemaValidator _schemaValidator;
 	private readonly ILogger<HealthService> _logger;
 
 	/// <summary>Creates a new health service with injected dependencies.</summary>
 	public HealthService(
 		IDataDirectoryResolver resolver,
 		IPlatformEnvironment platform,
+		ISchemaValidator schemaValidator,
 		ILogger<HealthService> logger)
 	{
 		_resolver = resolver;
 		_platform = platform;
+		_schemaValidator = schemaValidator;
 		_logger = logger;
 	}
 
@@ -38,11 +42,9 @@ public sealed class HealthService : IHealthService
 
 		CheckDataDirectory(directoryResult, issues);
 		var (dbExists, dbSize) = CheckDatabase(directoryResult.Path, issues);
+		var schemaStatus = CheckSchema(directoryResult.Path, dbExists, issues);
 		var processRunning = CheckProcess(issues);
 		var screenshots = CheckScreenshots(directoryResult.Path, issues);
-
-		// Schema validation deferred to WS-04
-		var schemaStatus = SchemaValidationStatus.NotChecked;
 
 		var status = DeriveStatus(issues);
 
@@ -101,6 +103,19 @@ public sealed class HealthService : IHealthService
 				Remediation = "Set the MANICTIME_DATA_DIR environment variable to the ManicTime data directory path.",
 			});
 		}
+	}
+
+	private SchemaValidationStatus CheckSchema(string? dataDirectory, bool dbExists, List<ValidationIssue> issues)
+	{
+		if (!dbExists || dataDirectory is null)
+		{
+			return SchemaValidationStatus.NotChecked;
+		}
+
+		var dbPath = Path.Combine(dataDirectory, DatabaseFileName);
+		var result = _schemaValidator.Validate(dbPath);
+		issues.AddRange(result.Issues);
+		return result.Status;
 	}
 
 	private (bool Exists, long? SizeBytes) CheckDatabase(string? dataDirectory, List<ValidationIssue> issues)
