@@ -1,5 +1,6 @@
 using ManicTimeMcp.Configuration;
 using ManicTimeMcp.Database;
+using ManicTimeMcp.Mcp;
 using ManicTimeMcp.Screenshots;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -11,6 +12,10 @@ builder.Services
 	.AddManicTimeDatabase()
 	.AddManicTimeScreenshots()
 	.AddMcpServer()
-	.WithStdioServerTransport();
+	.WithStdioServerTransport()
+	.WithTools<TimelineTools>()
+	.WithTools<ActivityTools>()
+	.WithTools<ScreenshotTools>()
+	.WithResources<ManicTimeResources>();
 
 await builder.Build().RunAsync().ConfigureAwait(false);
