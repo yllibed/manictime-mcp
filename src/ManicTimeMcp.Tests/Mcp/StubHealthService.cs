@@ -14,6 +14,8 @@ internal sealed class StubHealthService : IHealthService
 		DatabaseSizeBytes = 1024,
 		SchemaStatus = SchemaValidationStatus.Valid,
 		ManicTimeProcessRunning = false,
+		ManicTimeProcessId = null,
+		ManicTimeVersion = null,
 		Screenshots = new ScreenshotAvailability
 		{
 			Status = ScreenshotAvailabilityStatus.Available,

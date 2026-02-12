@@ -13,6 +13,7 @@ public sealed class HealthService : IHealthService
 	internal const string DatabaseFileName = "ManicTimeReports.db";
 	internal const string ScreenshotDirectoryName = "Screenshots";
 	internal const string ManicTimeProcessName = "ManicTime";
+	internal const string ManicTimeExeName = "ManicTime.exe";
 	internal const string ScreenshotSearchPattern = "*.jpg";
 	internal const string ScreenshotRemediationHint = "Review ManicTime screenshot capture and retention settings.";
 
@@ -43,7 +44,8 @@ public sealed class HealthService : IHealthService
 		CheckDataDirectory(directoryResult, issues);
 		var (dbExists, dbSize) = CheckDatabase(directoryResult.Path, issues);
 		var schemaStatus = CheckSchema(directoryResult.Path, dbExists, issues);
-		var processRunning = CheckProcess(issues);
+		var (processRunning, processId) = CheckProcess(issues);
+		var version = CheckManicTimeVersion();
 		var screenshots = CheckScreenshots(directoryResult.Path, issues);
 
 		var status = DeriveStatus(issues);
@@ -59,6 +61,8 @@ public sealed class HealthService : IHealthService
 			DatabaseSizeBytes = dbSize,
 			SchemaStatus = schemaStatus,
 			ManicTimeProcessRunning = processRunning,
+			ManicTimeProcessId = processId,
+			ManicTimeVersion = version,
 			Screenshots = screenshots,
 			Issues = issues.AsReadOnly(),
 		};
@@ -144,9 +148,10 @@ public sealed class HealthService : IHealthService
 		return (true, size);
 	}
 
-	private bool CheckProcess(List<ValidationIssue> issues)
+	private (bool Running, int? ProcessId) CheckProcess(List<ValidationIssue> issues)
 	{
-		var running = _platform.IsProcessRunning(ManicTimeProcessName);
+		var pid = _platform.GetProcessId(ManicTimeProcessName);
+		var running = pid.HasValue;
 
 		if (!running)
 		{
@@ -160,7 +165,19 @@ public sealed class HealthService : IHealthService
 			});
 		}
 
-		return running;
+		return (running, pid);
+	}
+
+	private string? CheckManicTimeVersion()
+	{
+		var installDir = _platform.GetManicTimeInstallDir();
+		if (installDir is null)
+		{
+			return null;
+		}
+
+		var exePath = Path.Combine(installDir, ManicTimeExeName);
+		return _platform.GetFileProductVersion(exePath);
 	}
 
 	private ScreenshotAvailability CheckScreenshots(string? dataDirectory, List<ValidationIssue> issues)

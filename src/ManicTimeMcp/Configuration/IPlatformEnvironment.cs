@@ -17,4 +17,13 @@ public interface IPlatformEnvironment
 
 	/// <summary>Checks whether a process with the given name is currently running.</summary>
 	bool IsProcessRunning(string processName);
+
+	/// <summary>Returns the process ID of the first process matching <paramref name="processName"/>, or null.</summary>
+	int? GetProcessId(string processName);
+
+	/// <summary>Returns the ManicTime installation directory from the Windows registry, or null.</summary>
+	string? GetManicTimeInstallDir();
+
+	/// <summary>Returns the ProductVersion of a file, or null if the file does not exist.</summary>
+	string? GetFileProductVersion(string filePath);
 }

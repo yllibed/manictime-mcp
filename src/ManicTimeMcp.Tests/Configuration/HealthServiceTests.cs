@@ -12,6 +12,10 @@ public sealed class HealthServiceTests
 	private const string TestDataDir = @"C:\TestManicTime";
 	private const string TestDbPath = @"C:\TestManicTime\ManicTimeReports.db";
 	private const string TestScreenshotDir = @"C:\TestManicTime\Screenshots";
+	private const string TestInstallDir = @"C:\Program Files\ManicTime\";
+	private const string TestExePath = @"C:\Program Files\ManicTime\ManicTime.exe";
+	private const string TestVersion = "2025.3.5.0";
+	private const int TestProcessId = 12345;
 
 	#region DeriveStatus
 
@@ -76,6 +80,9 @@ public sealed class HealthServiceTests
 			ExistingDirectories = { TestScreenshotDir },
 			DirectoriesWithFiles = { TestScreenshotDir },
 			RunningProcesses = { HealthService.ManicTimeProcessName },
+			ProcessIds = { [HealthService.ManicTimeProcessName] = TestProcessId },
+			ManicTimeInstallDir = TestInstallDir,
+			FileProductVersions = { [TestExePath] = TestVersion },
 		};
 
 		var sut = CreateService(resolver, platform);
@@ -88,6 +95,8 @@ public sealed class HealthServiceTests
 		report.DatabaseSizeBytes.Should().Be(1024 * 1024);
 		report.SchemaStatus.Should().Be(SchemaValidationStatus.Valid);
 		report.ManicTimeProcessRunning.Should().BeTrue();
+		report.ManicTimeProcessId.Should().Be(TestProcessId);
+		report.ManicTimeVersion.Should().Be(TestVersion);
 		report.Screenshots.Status.Should().Be(ScreenshotAvailabilityStatus.Available);
 		report.Screenshots.Reason.Should().Be(ScreenshotUnavailableReason.None);
 		report.Issues.Should().BeEmpty();
@@ -131,6 +140,7 @@ public sealed class HealthServiceTests
 			ExistingDirectories = { TestScreenshotDir },
 			DirectoriesWithFiles = { TestScreenshotDir },
 			RunningProcesses = { HealthService.ManicTimeProcessName },
+			ProcessIds = { [HealthService.ManicTimeProcessName] = TestProcessId },
 		};
 
 		var sut = CreateService(resolver, platform);
@@ -166,9 +176,57 @@ public sealed class HealthServiceTests
 
 		report.Status.Should().Be(HealthStatus.Degraded);
 		report.ManicTimeProcessRunning.Should().BeFalse();
+		report.ManicTimeProcessId.Should().BeNull();
 		report.Issues.Should().Contain(i =>
 			i.Code == IssueCode.ManicTimeProcessNotRunning &&
 			i.Severity == ValidationSeverity.Warning);
+	}
+
+	#endregion
+
+	#region GetHealthReport — version detection
+
+	[TestMethod]
+	public void GetHealthReport_ManicTimeInstalled_ReportsVersion()
+	{
+		var resolver = new StubResolver(TestDataDir, DataDirectorySource.EnvironmentVariable);
+		var platform = new FakePlatformEnvironment
+		{
+			ExistingFiles = { TestDbPath },
+			FileSizes = { [TestDbPath] = 500 },
+			ExistingDirectories = { TestScreenshotDir },
+			DirectoriesWithFiles = { TestScreenshotDir },
+			RunningProcesses = { HealthService.ManicTimeProcessName },
+			ProcessIds = { [HealthService.ManicTimeProcessName] = 9999 },
+			ManicTimeInstallDir = TestInstallDir,
+			FileProductVersions = { [TestExePath] = TestVersion },
+		};
+
+		var sut = CreateService(resolver, platform);
+		var report = sut.GetHealthReport();
+
+		report.ManicTimeVersion.Should().Be(TestVersion);
+	}
+
+	[TestMethod]
+	public void GetHealthReport_ManicTimeNotInstalled_ReportsNullVersion()
+	{
+		var resolver = new StubResolver(TestDataDir, DataDirectorySource.EnvironmentVariable);
+		var platform = new FakePlatformEnvironment
+		{
+			ExistingFiles = { TestDbPath },
+			FileSizes = { [TestDbPath] = 500 },
+			ExistingDirectories = { TestScreenshotDir },
+			DirectoriesWithFiles = { TestScreenshotDir },
+			RunningProcesses = { HealthService.ManicTimeProcessName },
+			ProcessIds = { [HealthService.ManicTimeProcessName] = 9999 },
+			// No ManicTimeInstallDir set
+		};
+
+		var sut = CreateService(resolver, platform);
+		var report = sut.GetHealthReport();
+
+		report.ManicTimeVersion.Should().BeNull();
 	}
 
 	#endregion
@@ -184,6 +242,7 @@ public sealed class HealthServiceTests
 			ExistingFiles = { TestDbPath },
 			FileSizes = { [TestDbPath] = 100 },
 			RunningProcesses = { HealthService.ManicTimeProcessName },
+			ProcessIds = { [HealthService.ManicTimeProcessName] = TestProcessId },
 			// Screenshot directory does NOT exist
 		};
 
@@ -211,6 +270,7 @@ public sealed class HealthServiceTests
 			ExistingDirectories = { TestScreenshotDir },
 			// DirectoriesWithFiles does NOT include screenshot dir — empty
 			RunningProcesses = { HealthService.ManicTimeProcessName },
+			ProcessIds = { [HealthService.ManicTimeProcessName] = TestProcessId },
 		};
 
 		var sut = CreateService(resolver, platform);
@@ -280,6 +340,9 @@ public sealed class HealthServiceTests
 		public HashSet<string> ExistingDirectories { get; } = new(StringComparer.OrdinalIgnoreCase);
 		public HashSet<string> DirectoriesWithFiles { get; } = new(StringComparer.OrdinalIgnoreCase);
 		public HashSet<string> RunningProcesses { get; } = new(StringComparer.OrdinalIgnoreCase);
+		public Dictionary<string, int> ProcessIds { get; } = new(StringComparer.OrdinalIgnoreCase);
+		public string? ManicTimeInstallDir { get; set; }
+		public Dictionary<string, string> FileProductVersions { get; } = new(StringComparer.OrdinalIgnoreCase);
 
 		public bool FileExists(string path) => ExistingFiles.Contains(path);
 
@@ -293,6 +356,14 @@ public sealed class HealthServiceTests
 
 		public bool IsProcessRunning(string processName) =>
 			RunningProcesses.Contains(processName);
+
+		public int? GetProcessId(string processName) =>
+			ProcessIds.TryGetValue(processName, out var pid) ? pid : null;
+
+		string? IPlatformEnvironment.GetManicTimeInstallDir() => ManicTimeInstallDir;
+
+		public string? GetFileProductVersion(string filePath) =>
+			FileProductVersions.TryGetValue(filePath, out var version) ? version : null;
 	}
 
 	#endregion

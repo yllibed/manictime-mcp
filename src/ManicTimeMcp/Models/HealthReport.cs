@@ -24,6 +24,12 @@ public sealed record HealthReport
 	/// <summary>Whether the ManicTime desktop process is currently running.</summary>
 	public required bool ManicTimeProcessRunning { get; init; }
 
+	/// <summary>Process ID of the running ManicTime instance, or null if not running.</summary>
+	public required int? ManicTimeProcessId { get; init; }
+
+	/// <summary>Installed ManicTime product version (e.g. "2025.3.5.0"), or null if not detected.</summary>
+	public required string? ManicTimeVersion { get; init; }
+
 	/// <summary>Screenshot directory availability details.</summary>
 	public required ScreenshotAvailability Screenshots { get; init; }
 
