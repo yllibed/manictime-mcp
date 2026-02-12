@@ -98,4 +98,27 @@ public sealed class ScreenshotToolTests
 		screenshot.GetProperty("hasData").GetBoolean().Should().BeTrue();
 		screenshot.GetProperty("dataBase64").GetString().Should().Be(Convert.ToBase64String(imageBytes));
 	}
+
+	[TestMethod]
+	public async Task GetScreenshots_InvalidDateFormat_ReturnsIsError()
+	{
+		await using var harness = new McpTestHarness((services, builder) =>
+		{
+			services.AddSingleton<IScreenshotService>(new StubScreenshotService());
+			builder.WithTools<ScreenshotTools>();
+		});
+
+		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
+		var result = await client.CallToolAsync(
+			"get_screenshots",
+			new Dictionary<string, object?>(StringComparer.Ordinal)
+			{
+				["startDate"] = "not-a-date",
+				["endDate"] = "2025-01-16",
+			}).ConfigureAwait(false);
+
+		result.IsError.Should().BeTrue();
+		var text = result.Content.OfType<TextContentBlock>().Single().Text;
+		text.Should().Contain("Invalid date format");
+	}
 }

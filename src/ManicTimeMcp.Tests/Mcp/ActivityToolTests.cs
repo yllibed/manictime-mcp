@@ -127,4 +127,40 @@ public sealed class ActivityToolTests
 		doc.RootElement.GetProperty("schemaName").GetString().Should().Be("ManicTime/Applications");
 		doc.RootElement.GetProperty("count").GetInt32().Should().Be(2);
 	}
+
+	[TestMethod]
+	public async Task GetActivities_InvalidDateFormat_ReturnsIsError()
+	{
+		await using var harness = CreateHarness();
+		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
+		var result = await client.CallToolAsync(
+			"get_activities",
+			new Dictionary<string, object?>(StringComparer.Ordinal)
+			{
+				["timelineId"] = 1L,
+				["startDate"] = "not-a-date",
+				["endDate"] = "2025-01-16",
+			}).ConfigureAwait(false);
+
+		result.IsError.Should().BeTrue();
+		var text = result.Content.OfType<TextContentBlock>().Single().Text;
+		text.Should().Contain("Invalid date format");
+	}
+
+	[TestMethod]
+	public async Task GetDailySummary_InvalidDateFormat_ReturnsIsError()
+	{
+		await using var harness = CreateHarness();
+		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
+		var result = await client.CallToolAsync(
+			"get_daily_summary",
+			new Dictionary<string, object?>(StringComparer.Ordinal)
+			{
+				["date"] = "not-a-date",
+			}).ConfigureAwait(false);
+
+		result.IsError.Should().BeTrue();
+		var text = result.Content.OfType<TextContentBlock>().Single().Text;
+		text.Should().Contain("Invalid date format");
+	}
 }
