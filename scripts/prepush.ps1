@@ -26,6 +26,6 @@ function Invoke-Step {
 Invoke-Step 'Restore' { dotnet restore $solution }
 Invoke-Step 'Build' { dotnet build $solution -c Release -warnaserror --no-restore }
 Invoke-Step 'Test' { dotnet test --solution $solution -c Release --no-build }
-Invoke-Step 'Pack' { dotnet pack $solution -c Release --no-build }
+Invoke-Step 'Pack' { dotnet pack $solution -c Release }
 
 Write-Host "`nAll pre-push gates passed." -ForegroundColor Green

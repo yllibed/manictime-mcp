@@ -77,7 +77,7 @@ jobs:
           }
 
       - name: Pack (dry-run)
-        run: dotnet pack src/ManicTimeMcp.slnx -c Release --no-build -o ${{ runner.temp }}/packages
+        run: dotnet pack src/ManicTimeMcp.slnx -c Release -o ${{ runner.temp }}/packages
 
       - name: Upload test results
         if: always()
