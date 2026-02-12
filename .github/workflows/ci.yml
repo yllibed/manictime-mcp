@@ -41,7 +41,7 @@ jobs:
           dotnet test --solution src/ManicTimeMcp.slnx
           -c Release
           --no-build
-          --results-directory ${{ runner.temp }}/test-results
+          --results-directory TestResults
           --
           --report-trx
           --coverage
@@ -52,30 +52,27 @@ jobs:
         uses: dorny/test-reporter@v1
         with:
           name: Test Results
-          path: '${{ runner.temp }}/test-results/**/*.trx'
+          path: 'TestResults/**/*.trx'
           reporter: dotnet-trx
 
       - name: Coverage summary
         if: always()
         shell: pwsh
         run: |
-          $coberturaFiles = Get-ChildItem -Path "${{ runner.temp }}/test-results" -Filter "coverage.cobertura.xml" -Recurse -ErrorAction SilentlyContinue
+          $coberturaFiles = Get-ChildItem -Path TestResults -Filter '*.cobertura.xml' -Recurse -ErrorAction SilentlyContinue
           if (-not $coberturaFiles -or $coberturaFiles.Count -eq 0) {
-            Write-Host "No Cobertura coverage files found — skipping summary."
+            Write-Host 'No Cobertura coverage files found — skipping summary.'
             exit 0
           }
           foreach ($file in $coberturaFiles) {
             [xml]$xml = Get-Content $file.FullName
             $lineRate = [math]::Round([double]$xml.coverage.'line-rate' * 100, 1)
             $branchRate = [math]::Round([double]$xml.coverage.'branch-rate' * 100, 1)
-            @"
-          ## Code Coverage
-
-          | Metric | Value |
-          |--------|-------|
-          | Line coverage | ${lineRate}% |
-          | Branch coverage | ${branchRate}% |
-          "@ | Out-File -Append $env:GITHUB_STEP_SUMMARY
+            "## Code Coverage`n" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+            "| Metric | Value |" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+            "|--------|-------|" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+            "| Line coverage | ${lineRate}% |" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+            "| Branch coverage | ${branchRate}% |" | Out-File -Append $env:GITHUB_STEP_SUMMARY
             Write-Host "Line coverage: ${lineRate}%, Branch coverage: ${branchRate}%"
           }
 
@@ -87,7 +84,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: test-results
-          path: ${{ runner.temp }}/test-results/**
+          path: TestResults/**
           retention-days: 14
 
       - name: Upload packages
