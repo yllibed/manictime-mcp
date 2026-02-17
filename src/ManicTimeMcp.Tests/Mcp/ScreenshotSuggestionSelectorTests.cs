@@ -18,12 +18,7 @@ public sealed class ScreenshotSuggestionSelectorTests
 			End = end,
 			DurationMinutes = Math.Round((endDt - startDt).TotalMinutes, digits: 1),
 			Application = app,
-			Refs = new SegmentRefs
-			{
-				TimelineRef = 1,
-				ActivityRef = 1,
-				ScreenshotRef = screenshotRef,
-			},
+			ScreenshotRef = screenshotRef,
 		};
 	}
 

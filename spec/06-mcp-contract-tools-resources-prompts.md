@@ -110,6 +110,9 @@ Parameters:
   startDate: string (ISO-8601 date, inclusive)
   endDate: string (ISO-8601 date, exclusive)
   includeWebsites: bool (default true)
+  minDurationMinutes: number (default 0, filters short segments)
+  maxGapMinutes: number (default 2.0, merges same-app segments within this gap)
+  includeSummary: bool (default true, set false to omit topApplications/topWebsites)
 
 Response: {
   startDate: string,
@@ -120,32 +123,34 @@ Response: {
     end: string,
     durationMinutes: number,
     application: string | null,
-    applicationColor: string | null,
-    document: string | null,
-    tags: string[] | null,
-    refs: {
-      timelineRef: number | null,
-      activityRef: number | null
-    } | null
+    document: string | null,          // omitted when null
+    website: string | null,           // omitted when null
+    tags: string[] | null,            // omitted when null
+    screenshotRef: string | null      // omitted when null; flat field, not nested
   }],
   topApplications: [{ name: string, color: string, totalMinutes: number }],
-  topWebsites: [{ name: string, totalMinutes: number }],
+  topWebsites: [{ name: string, totalMinutes: number }],  // omitted when null
+  suggestedScreenshots: [{ ... }] | null,                  // omitted when null
   truncation: {
     truncated: bool,
     returnedCount: number,
-    totalAvailable: number | null
+    totalAvailable: number | null     // omitted when null
   },
   diagnostics: {
     degraded: bool,
-    reasonCode: string | null,
-    remediationHint: string | null
+    reasonCode: string | null,        // omitted when null
+    remediationHint: string | null    // omitted when null
   }
 }
 ```
 
+Note: null fields are omitted from the JSON response (WhenWritingNull). See ADR-0006.
+
 Implementation: query `Ar_ApplicationByDay` + `Ar_WebSiteByDay` + `Ar_DocumentByDay` joined to `Ar_CommonGroup` for aggregates. Cross-reference with `Ar_Activity` for segment boundaries and with `Ar_ActivityTag`/`Ar_Tag` for segment tags (returned as `tags: string[]`, deserialized from the `JSON_GROUP_ARRAY` output of WS-04 Query C).
 
 Design note: `websites` and `notes` were removed from the segment schema because (a) website data lives in a separate timeline (`ManicTime/BrowserUrls`) and would require cross-timeline merging per segment, which is disproportionately complex for this phase, and (b) the `Ar_Activity.Notes` column is empty in all observed databases. Website data is available at the aggregate level via `topWebsites` and the dedicated `get_website_usage` tool. `includeIdleGaps`/`idleGaps` were removed because idle-gap semantics are weak without `ComputerUsage` timeline context (on/off/locked/idle); raw segment gaps are better served by `get_computer_usage`.
+
+Payload efficiency (ADR-0006): `applicationColor` was removed from segments (available in `topApplications[].color`). The nested `refs` object was flattened to a single `screenshotRef` field — `timelineRef` and `activityRef` were opaque and unused by consumers. Null fields are omitted globally via `WhenWritingNull`. Gap-based merging (`maxGapMinutes`) reduces segment count by merging nearby same-app blocks.
 
 Hard caps: max 200 segments, max 50 top applications, max 50 top websites.
 
@@ -205,6 +210,7 @@ Parameters:
   startDate: string (ISO-8601 date, inclusive)
   endDate: string (ISO-8601 date, exclusive, max 31 days from startDate)
   limit: number (default 50, max 200)
+  minMinutes: number (default 0.5, filters brief visits; set 0 to include all)
 
 Response: {
   breakdownGranularity: "hour" | "day",

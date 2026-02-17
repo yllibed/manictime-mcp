@@ -52,13 +52,14 @@ public sealed class NarrativeTools
 		[Description("Include activity segments in response (default true). Set false to reduce payload when only summary data needed.")] bool includeSegments = true,
 		[Description("Minimum segment duration in minutes to include (default 0). Useful for filtering noise — e.g. 0.5 filters sub-30s segments.")] double minDurationMinutes = 0,
 		[Description("Include hourly website breakdown (default false). Adds per-hour detail for each website.")] bool includeHourlyWebBreakdown = false,
+		[Description("Maximum gap in minutes between same-app segments to merge them (default 2). Reduces segment count by merging nearby blocks of the same application.")] double maxGapMinutes = 2.0,
 		CancellationToken cancellationToken = default)
 	{
 		try
 		{
 			var parsed = DateTime.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
 			var endDate = parsed.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-			var response = await BuildNarrativeAsync(date, endDate, includeWebsites: true, includeSegments, minDurationMinutes, includeHourlyWebBreakdown, cancellationToken).ConfigureAwait(false);
+			var response = await BuildNarrativeAsync(date, endDate, includeWebsites: true, includeSegments, minDurationMinutes, includeHourlyWebBreakdown, maxGapMinutes, includeSummary: true, cancellationToken).ConfigureAwait(false);
 			return ToolResults.Success(JsonSerializer.Serialize(response, JsonOptions.Default));
 		}
 		catch (FormatException ex)
@@ -82,11 +83,13 @@ public sealed class NarrativeTools
 		[Description("End date (ISO-8601, exclusive)")] string endDate,
 		[Description("Include website usage (default true)")] bool includeWebsites = true,
 		[Description("Minimum segment duration in minutes to include (default 0). Useful for filtering noise — e.g. 0.5 filters sub-30s segments.")] double minDurationMinutes = 0,
+		[Description("Maximum gap in minutes between same-app segments to merge them (default 2). Reduces segment count by merging nearby blocks of the same application.")] double maxGapMinutes = 2.0,
+		[Description("Include topApplications and topWebsites summary data (default true). Set false to reduce payload when only segments are needed.")] bool includeSummary = true,
 		CancellationToken cancellationToken = default)
 	{
 		try
 		{
-			var response = await BuildNarrativeAsync(startDate, endDate, includeWebsites, includeSegments: true, minDurationMinutes, includeHourlyWebBreakdown: false, cancellationToken).ConfigureAwait(false);
+			var response = await BuildNarrativeAsync(startDate, endDate, includeWebsites, includeSegments: true, minDurationMinutes, includeHourlyWebBreakdown: false, maxGapMinutes, includeSummary, cancellationToken).ConfigureAwait(false);
 			return ToolResults.Success(JsonSerializer.Serialize(response, JsonOptions.Default));
 		}
 		catch (FormatException ex)
@@ -141,7 +144,7 @@ public sealed class NarrativeTools
 		[Description("Start date (ISO-8601, inclusive)")] string startDate,
 		[Description("End date (ISO-8601, exclusive, max 31 days)")] string endDate,
 		[Description("Maximum number of websites (default 50, max 200)")] int? limit = null,
-		[Description("Minimum total minutes to include a website (default 0). Use 0.5 or 1.0 to filter noise.")] double minMinutes = 0,
+		[Description("Minimum total minutes to include a website (default 0.5). Filters sub-30s visits. Set 0 to include all.")] double minMinutes = 0.5,
 		CancellationToken cancellationToken = default)
 	{
 		try
@@ -172,15 +175,18 @@ public sealed class NarrativeTools
 
 	private async Task<NarrativeResponse> BuildNarrativeAsync(
 		string startDate, string endDate, bool includeWebsites, bool includeSegments,
-		double minDurationMinutes, bool includeHourlyWebBreakdown, CancellationToken ct)
+		double minDurationMinutes, bool includeHourlyWebBreakdown, double maxGapMinutes,
+		bool includeSummary = true, CancellationToken ct = default)
 	{
 		var (segments, totalMinutes, totalSegments, isTruncated) =
-			await BuildSegmentDataAsync(startDate, endDate, includeSegments, minDurationMinutes, ct).ConfigureAwait(false);
+			await BuildSegmentDataAsync(startDate, endDate, includeSegments, minDurationMinutes, maxGapMinutes, ct).ConfigureAwait(false);
 
 		var suggestedScreenshots = ScreenshotSuggestionSelector.Select(segments);
 
-		var topApps = await GetTopAppsAsync(startDate, endDate, ct).ConfigureAwait(false);
-		var topWebsites = includeWebsites
+		var topApps = includeSummary
+			? await GetTopAppsAsync(startDate, endDate, ct).ConfigureAwait(false)
+			: [];
+		var topWebsites = includeSummary && includeWebsites
 			? await GetTopWebsitesAsync(startDate, endDate, ct).ConfigureAwait(false)
 			: null;
 
@@ -210,7 +216,7 @@ public sealed class NarrativeTools
 
 	private async Task<(List<NarrativeSegment> Segments, double TotalMinutes, int TotalSegments, bool IsTruncated)>
 		BuildSegmentDataAsync(string startDate, string endDate, bool includeSegments,
-			double minDurationMinutes, CancellationToken ct)
+			double minDurationMinutes, double maxGapMinutes, CancellationToken ct)
 	{
 		if (!includeSegments)
 		{
@@ -225,7 +231,7 @@ public sealed class NarrativeTools
 
 		var rawSegments = await BuildSegmentsAsync(startLocal, endLocal, ct).ConfigureAwait(false);
 		var totalMinutes = rawSegments.Sum(s => s.DurationMinutes);
-		var segments = MergeConsecutiveSegments(rawSegments);
+		var segments = MergeConsecutiveSegments(rawSegments, maxGapMinutes);
 
 		if (minDurationMinutes > 0)
 		{
@@ -391,16 +397,10 @@ public sealed class NarrativeTools
 					End = a.EndLocalTime,
 					DurationMinutes = Math.Round((endDt - startDt).TotalMinutes, digits: 1),
 					Application = a.CommonGroupName ?? a.GroupName ?? a.Name,
-					ApplicationColor = a.GroupColor,
 					Document = FindOverlappingDocument(docActivities, startDt, endDt),
 					Website = FindOverlappingDocument(webActivities, startDt, endDt),
 					Tags = a.Tags is { Length: > 0 } ? a.Tags : null,
-					Refs = new SegmentRefs
-					{
-						TimelineRef = a.ReportId,
-						ActivityRef = a.ActivityId,
-						ScreenshotRef = FindClosestScreenshot(screenshots, startDt, endDt),
-					},
+					ScreenshotRef = FindClosestScreenshot(screenshots, startDt, endDt),
 				};
 			})
 			.ToList();
@@ -482,24 +482,26 @@ public sealed class NarrativeTools
 	}
 
 	/// <summary>
-	/// Merges consecutive segments with the same application, then absorbs
-	/// short interruptions (&lt;30s) between same-app segments.
+	/// Merges consecutive segments with the same application (within a gap threshold),
+	/// then absorbs short interruptions (&lt;30s) between same-app segments.
 	/// </summary>
-	internal static List<NarrativeSegment> MergeConsecutiveSegments(List<NarrativeSegment> segments)
+	/// <param name="segments">Ordered segments to merge.</param>
+	/// <param name="maxGapMinutes">Maximum gap in minutes between same-app segments to still merge them. Default 2 minutes.</param>
+	internal static List<NarrativeSegment> MergeConsecutiveSegments(List<NarrativeSegment> segments, double maxGapMinutes = 2.0)
 	{
 		if (segments.Count <= 1)
 		{
 			return segments;
 		}
 
-		// Pass 1: merge consecutive same-app segments
-		var merged = MergeConsecutiveSameApp(segments);
+		// Pass 1: merge consecutive same-app segments within gap threshold
+		var merged = MergeConsecutiveSameApp(segments, maxGapMinutes);
 
 		// Pass 2: absorb short interruptions between same-app segments
 		return AbsorbShortInterruptions(merged);
 	}
 
-	private static List<NarrativeSegment> MergeConsecutiveSameApp(List<NarrativeSegment> segments)
+	private static List<NarrativeSegment> MergeConsecutiveSameApp(List<NarrativeSegment> segments, double maxGapMinutes)
 	{
 		var merged = new List<NarrativeSegment>(segments.Count);
 		var current = segments[0];
@@ -507,7 +509,8 @@ public sealed class NarrativeTools
 		for (var i = 1; i < segments.Count; i++)
 		{
 			var next = segments[i];
-			if (string.Equals(current.Application, next.Application, StringComparison.Ordinal))
+			if (string.Equals(current.Application, next.Application, StringComparison.Ordinal)
+				&& GapMinutes(current, next) <= maxGapMinutes)
 			{
 				current = MergeTwo(current, next);
 			}
@@ -520,6 +523,13 @@ public sealed class NarrativeTools
 
 		merged.Add(current);
 		return merged;
+	}
+
+	private static double GapMinutes(NarrativeSegment a, NarrativeSegment b)
+	{
+		var aEnd = DateTime.ParseExact(a.End, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+		var bStart = DateTime.ParseExact(b.Start, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+		return (bStart - aEnd).TotalMinutes;
 	}
 
 	/// <summary>
@@ -575,9 +585,8 @@ public sealed class NarrativeTools
 			End = b.End,
 			DurationMinutes = Math.Round((endDt - startDt).TotalMinutes, digits: 1),
 			Application = a.Application,
-			ApplicationColor = a.ApplicationColor,
 			Tags = MergeTags(a.Tags, b.Tags),
-			Refs = a.Refs,
+			ScreenshotRef = a.ScreenshotRef,
 		};
 	}
 

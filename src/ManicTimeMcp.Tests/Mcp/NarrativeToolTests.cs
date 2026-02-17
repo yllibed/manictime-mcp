@@ -234,7 +234,7 @@ public sealed class NarrativeToolTests
 	}
 
 	[TestMethod]
-	public async Task GetActivityNarrative_IncludesTagsAndRefs()
+	public async Task GetActivityNarrative_IncludesTagsAndScreenshotRef()
 	{
 		await using var harness = CreateEnrichedHarness();
 		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
@@ -258,14 +258,12 @@ public sealed class NarrativeToolTests
 		first.GetProperty("tags").GetArrayLength().Should().Be(2);
 		first.GetProperty("tags")[0].GetString().Should().Be("coding");
 
-		// Second segment has no tags (null)
+		// Second segment has no tags (omitted by WhenWritingNull)
 		var second = segments[1];
-		second.GetProperty("tags").ValueKind.Should().Be(JsonValueKind.Null);
+		second.TryGetProperty("tags", out _).Should().BeFalse();
 
-		// Both segments have refs
-		first.GetProperty("refs").GetProperty("timelineRef").GetInt64().Should().Be(1);
-		first.GetProperty("refs").GetProperty("activityRef").GetInt64().Should().Be(1);
-		second.GetProperty("refs").GetProperty("activityRef").GetInt64().Should().Be(2);
+		// No screenshots registered, so screenshotRef is omitted
+		first.TryGetProperty("screenshotRef", out _).Should().BeFalse();
 	}
 
 	[TestMethod]
@@ -615,6 +613,32 @@ public sealed class NarrativeToolTests
 		doc.RootElement.GetProperty("totalActiveMinutes").GetDouble().Should().BeGreaterThan(0);
 	}
 
+	[TestMethod]
+	public async Task GetActivityNarrative_IncludeSummaryFalse_OmitsTopData()
+	{
+		await using var harness = CreateHarness();
+		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
+		var result = await client.CallToolAsync(
+			"get_activity_narrative",
+			new Dictionary<string, object?>(StringComparer.Ordinal)
+			{
+				["startDate"] = "2025-01-15",
+				["endDate"] = "2025-01-16",
+				["includeSummary"] = false,
+			}).ConfigureAwait(false);
+
+		result.IsError.Should().NotBeTrue();
+		var text = result.Content.OfType<TextContentBlock>().Single().Text;
+		var doc = JsonDocument.Parse(text);
+
+		// Segments should still be present
+		doc.RootElement.GetProperty("segments").GetArrayLength().Should().BeGreaterThan(0);
+		// topApplications should be empty
+		doc.RootElement.GetProperty("topApplications").GetArrayLength().Should().Be(0);
+		// topWebsites should be omitted (null → WhenWritingNull)
+		doc.RootElement.TryGetProperty("topWebsites", out _).Should().BeFalse();
+	}
+
 	private static readonly ScreenshotSelection SampleScreenshotSelection = new()
 	{
 		Screenshots =
@@ -667,17 +691,58 @@ public sealed class NarrativeToolTests
 
 		var segments = doc.RootElement.GetProperty("segments");
 		// First segment (08:00-09:00) — closest screenshot is at 08:30
-		segments[0].GetProperty("refs").GetProperty("screenshotRef").GetString().Should().Be("ref-08-30");
+		segments[0].GetProperty("screenshotRef").GetString().Should().Be("ref-08-30");
 		// Second segment (09:00-10:00) — closest screenshot is at 09:30
-		segments[1].GetProperty("refs").GetProperty("screenshotRef").GetString().Should().Be("ref-09-30");
+		segments[1].GetProperty("screenshotRef").GetString().Should().Be("ref-09-30");
+	}
+
+	[TestMethod]
+	public async Task GetWebsiteUsage_DefaultMinMinutes_FiltersBriefVisits()
+	{
+		// One website with 20 seconds (0.33 min), one with 120 seconds (2 min)
+		var hourlyWeb = new HourlyUsageDto[]
+		{
+			new() { Day = "2025-01-15", Hour = 10, Name = "brief-site.com", TotalSeconds = 20 },
+			new() { Day = "2025-01-15", Hour = 10, Name = "real-site.com", TotalSeconds = 120 },
+		};
+		await using var harness = new McpTestHarness((services, builder) =>
+		{
+			services.AddSingleton<ITimelineRepository>(new StubTimelineRepository(SampleTimelines));
+			services.AddSingleton<IActivityRepository>(new StubActivityRepository(SampleActivities));
+			services.AddSingleton<IUsageRepository>(new StubUsageRepository(
+				dailyApp: SampleDailyAppUsage, hourlyWeb: hourlyWeb));
+			services.AddSingleton(CreateFullCapabilities());
+			builder.WithTools<NarrativeTools>();
+		});
+		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
+		var result = await client.CallToolAsync(
+			"get_website_usage",
+			new Dictionary<string, object?>(StringComparer.Ordinal)
+			{
+				["startDate"] = "2025-01-15",
+				["endDate"] = "2025-01-16",
+			}).ConfigureAwait(false);
+
+		result.IsError.Should().NotBeTrue();
+		var text = result.Content.OfType<TextContentBlock>().Single().Text;
+		var doc = JsonDocument.Parse(text);
+
+		var websites = doc.RootElement.GetProperty("websites");
+		// brief-site.com (0.33 min) should be filtered by default minMinutes=0.5
+		var names = Enumerable.Range(0, websites.GetArrayLength())
+			.Select(i => websites[i].GetProperty("name").GetString())
+			.ToList();
+		names.Should().Contain("real-site.com");
+		names.Should().NotContain("brief-site.com");
 	}
 
 	#region Unit tests for static helpers
 
 	[TestMethod]
-	public void MergeConsecutiveSegments_TotalNotInflatedByGaps()
+	public void MergeConsecutiveSegments_LargeGap_DoesNotMerge()
 	{
-		// Two segments with a gap between them: 08:00-09:00 and 09:30-10:00
+		// Two segments with a 30-min gap: 08:00-09:00 and 09:30-10:00
+		// Default maxGapMinutes=2, so this gap is too large to merge
 		var segments = new List<NarrativeSegment>
 		{
 			new()
@@ -692,17 +757,62 @@ public sealed class NarrativeToolTests
 			},
 		};
 
-		var rawTotal = segments.Sum(s => s.DurationMinutes);
-		rawTotal.Should().Be(90.0);
+		var merged = NarrativeTools.MergeConsecutiveSegments(segments);
+		// 30-min gap exceeds default 2-min threshold — segments stay separate
+		merged.Should().HaveCount(2);
+		merged[0].DurationMinutes.Should().Be(60.0);
+		merged[1].DurationMinutes.Should().Be(30.0);
+	}
+
+	[TestMethod]
+	public void MergeConsecutiveSegments_SmallGap_Merges()
+	{
+		// Two segments with a 1-min gap: 08:00-09:00 and 09:01-10:00
+		// Default maxGapMinutes=2, so this gap is within threshold
+		var segments = new List<NarrativeSegment>
+		{
+			new()
+			{
+				Start = "2025-01-15 08:00:00", End = "2025-01-15 09:00:00",
+				DurationMinutes = 60.0, Application = "VS Code",
+			},
+			new()
+			{
+				Start = "2025-01-15 09:01:00", End = "2025-01-15 10:00:00",
+				DurationMinutes = 59.0, Application = "VS Code",
+			},
+		};
 
 		var merged = NarrativeTools.MergeConsecutiveSegments(segments);
-		// Merge produces one segment spanning 08:00-10:00 = 120 min (includes gap)
+		// 1-min gap is within default 2-min threshold — segments merge
+		merged.Should().HaveCount(1);
+		merged[0].Start.Should().Be("2025-01-15 08:00:00");
+		merged[0].End.Should().Be("2025-01-15 10:00:00");
+		merged[0].DurationMinutes.Should().Be(120.0);
+	}
+
+	[TestMethod]
+	public void MergeConsecutiveSegments_CustomGapThreshold()
+	{
+		// Two segments with a 5-min gap, using maxGapMinutes=10
+		var segments = new List<NarrativeSegment>
+		{
+			new()
+			{
+				Start = "2025-01-15 08:00:00", End = "2025-01-15 09:00:00",
+				DurationMinutes = 60.0, Application = "VS Code",
+			},
+			new()
+			{
+				Start = "2025-01-15 09:05:00", End = "2025-01-15 10:00:00",
+				DurationMinutes = 55.0, Application = "VS Code",
+			},
+		};
+
+		var merged = NarrativeTools.MergeConsecutiveSegments(segments, maxGapMinutes: 10.0);
+		// 5-min gap is within 10-min threshold — segments merge
 		merged.Should().HaveCount(1);
 		merged[0].DurationMinutes.Should().Be(120.0);
-
-		// But the CORRECT totalActiveMinutes should use the raw sum (90 min), not the merged sum
-		// This test verifies the principle: raw total != merged total when gaps exist
-		rawTotal.Should().BeLessThan(merged.Sum(s => s.DurationMinutes));
 	}
 
 	[TestMethod]

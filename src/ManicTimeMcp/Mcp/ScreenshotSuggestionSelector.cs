@@ -36,7 +36,7 @@ internal static class ScreenshotSuggestionSelector
 			.Take(MaxSuggestions)
 			.Select(c => new SuggestedScreenshot
 			{
-				ScreenshotRef = c.Segment.Refs!.ScreenshotRef!,
+				ScreenshotRef = c.Segment.ScreenshotRef!,
 				Timestamp = c.Segment.Start,
 				Application = c.Segment.Application,
 				Hint = c.Hint,
@@ -53,7 +53,7 @@ internal static class ScreenshotSuggestionSelector
 		for (var i = 1; i < segments.Count; i++)
 		{
 			if (!string.Equals(segments[i].Application, segments[i - 1].Application, StringComparison.Ordinal)
-				&& segments[i].Refs?.ScreenshotRef is not null)
+				&& segments[i].ScreenshotRef is not null)
 			{
 				candidates.Add((segments[i], "app transition"));
 			}
@@ -61,7 +61,7 @@ internal static class ScreenshotSuggestionSelector
 
 		// Long-session candidates (top segments by duration)
 		var longSessions = segments
-			.Where(s => s.Refs?.ScreenshotRef is not null)
+			.Where(s => s.ScreenshotRef is not null)
 			.OrderByDescending(s => s.DurationMinutes)
 			.Take(MaxSuggestions);
 
@@ -83,7 +83,7 @@ internal static class ScreenshotSuggestionSelector
 
 		foreach (var (segment, hint) in candidates)
 		{
-			var screenshotRef = segment.Refs!.ScreenshotRef!;
+			var screenshotRef = segment.ScreenshotRef!;
 			if (!seen.Add(screenshotRef))
 			{
 				continue;
