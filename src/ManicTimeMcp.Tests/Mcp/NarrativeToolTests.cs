@@ -99,6 +99,7 @@ public sealed class NarrativeToolTests
 			{
 				["startDate"] = "2025-01-15",
 				["endDate"] = "2025-01-16",
+				["includeSummary"] = true,
 			}).ConfigureAwait(false);
 
 		result.IsError.Should().NotBeTrue();
@@ -124,6 +125,7 @@ public sealed class NarrativeToolTests
 				["startDate"] = "2025-01-15",
 				["endDate"] = "2025-01-16",
 				["includeWebsites"] = true,
+				["includeSummary"] = true,
 			}).ConfigureAwait(false);
 
 		var text = result.Content.OfType<TextContentBlock>().Single().Text;
@@ -880,6 +882,215 @@ public sealed class NarrativeToolTests
 		NarrativeTools.IsValidWebsiteName("github.com").Should().BeTrue();
 		NarrativeTools.IsValidWebsiteName("localhost").Should().BeTrue();
 		NarrativeTools.IsValidWebsiteName("go").Should().BeTrue();
+	}
+
+	[TestMethod]
+	public void MergeTwo_PreservesDocumentAndWebsite()
+	{
+		var segments = new List<NarrativeSegment>
+		{
+			new()
+			{
+				Start = "2025-01-15 08:00:00", End = "2025-01-15 09:00:00",
+				DurationMinutes = 60.0, Application = "Chrome",
+				Document = "README.md", Website = "github.com",
+			},
+			new()
+			{
+				Start = "2025-01-15 09:00:00", End = "2025-01-15 10:00:00",
+				DurationMinutes = 60.0, Application = "Chrome",
+				Document = null, Website = null,
+			},
+		};
+
+		var merged = NarrativeTools.MergeConsecutiveSegments(segments);
+		merged.Should().HaveCount(1);
+		merged[0].Document.Should().Be("README.md");
+		merged[0].Website.Should().Be("github.com");
+	}
+
+	[TestMethod]
+	public void MergeTwo_PicksSecondDocumentWhenFirstIsNull()
+	{
+		var segments = new List<NarrativeSegment>
+		{
+			new()
+			{
+				Start = "2025-01-15 08:00:00", End = "2025-01-15 09:00:00",
+				DurationMinutes = 60.0, Application = "Chrome",
+				Document = null, Website = null,
+			},
+			new()
+			{
+				Start = "2025-01-15 09:00:00", End = "2025-01-15 10:00:00",
+				DurationMinutes = 60.0, Application = "Chrome",
+				Document = "index.html", Website = "example.com",
+			},
+		};
+
+		var merged = NarrativeTools.MergeConsecutiveSegments(segments);
+		merged.Should().HaveCount(1);
+		merged[0].Document.Should().Be("index.html");
+		merged[0].Website.Should().Be("example.com");
+	}
+
+	[TestMethod]
+	public void SanitizeDocumentName_NormalizesWindowsPath()
+	{
+		NarrativeTools.SanitizeDocumentName(@"C:\Users\test\file.cs")
+			.Should().Be("file:///C:/Users/test/file.cs");
+	}
+
+	[TestMethod]
+	public void SanitizeDocumentName_LeavesUrlsUnchanged()
+	{
+		NarrativeTools.SanitizeDocumentName("https://github.com/repo")
+			.Should().Be("https://github.com/repo");
+	}
+
+	[TestMethod]
+	public void SanitizeDocumentName_LeavesFileUrisUnchanged()
+	{
+		NarrativeTools.SanitizeDocumentName("file:///C:/Users/test/file.cs")
+			.Should().Be("file:///C:/Users/test/file.cs");
+	}
+
+	[TestMethod]
+	public void SanitizeDocumentName_ReturnsNullForNull()
+	{
+		NarrativeTools.SanitizeDocumentName(name: null).Should().BeNull();
+	}
+
+	[TestMethod]
+	public void SanitizeDocumentName_HandlesForwardSlashPath()
+	{
+		NarrativeTools.SanitizeDocumentName("D:/projects/app/main.cs")
+			.Should().Be("file:///D:/projects/app/main.cs");
+	}
+
+	[TestMethod]
+	public void ClipToActiveIntervals_ExcludesAwayTime()
+	{
+		var activities = new[]
+		{
+			new EnrichedActivityDto
+			{
+				ActivityId = 1, ReportId = 1,
+				StartLocalTime = "2025-01-15 08:00:00", EndLocalTime = "2025-01-15 10:00:00",
+				Name = "VS Code", GroupId = null,
+			},
+		};
+
+		var usageActivities = new ActivityDto[]
+		{
+			new() { ActivityId = 100, ReportId = 3, StartLocalTime = "2025-01-15 08:00:00", EndLocalTime = "2025-01-15 09:00:00", Name = "Active", GroupId = null },
+			new() { ActivityId = 101, ReportId = 3, StartLocalTime = "2025-01-15 09:00:00", EndLocalTime = "2025-01-15 09:30:00", Name = "Away", GroupId = null },
+			new() { ActivityId = 102, ReportId = 3, StartLocalTime = "2025-01-15 09:30:00", EndLocalTime = "2025-01-15 10:00:00", Name = "Active", GroupId = null },
+		};
+
+		var result = NarrativeTools.ClipToActiveIntervals(activities, usageActivities);
+
+		result.Should().HaveCount(2);
+		result[0].StartLocalTime.Should().Be("2025-01-15 08:00:00");
+		result[0].EndLocalTime.Should().Be("2025-01-15 09:00:00");
+		result[1].StartLocalTime.Should().Be("2025-01-15 09:30:00");
+		result[1].EndLocalTime.Should().Be("2025-01-15 10:00:00");
+	}
+
+	[TestMethod]
+	public void ClipToActiveIntervals_NoUsageData_ReturnsOriginal()
+	{
+		var activities = new[]
+		{
+			new EnrichedActivityDto
+			{
+				ActivityId = 1, ReportId = 1,
+				StartLocalTime = "2025-01-15 08:00:00", EndLocalTime = "2025-01-15 10:00:00",
+				Name = "VS Code", GroupId = null,
+			},
+		};
+
+		var result = NarrativeTools.ClipToActiveIntervals(activities, []);
+		result.Should().HaveCount(1);
+		result[0].StartLocalTime.Should().Be("2025-01-15 08:00:00");
+	}
+
+	[TestMethod]
+	public void ClipToActiveIntervals_EntirelyAway_ReturnsEmpty()
+	{
+		var activities = new[]
+		{
+			new EnrichedActivityDto
+			{
+				ActivityId = 1, ReportId = 1,
+				StartLocalTime = "2025-01-15 09:00:00", EndLocalTime = "2025-01-15 09:30:00",
+				Name = "VS Code", GroupId = null,
+			},
+		};
+
+		var usageActivities = new ActivityDto[]
+		{
+			new() { ActivityId = 100, ReportId = 3, StartLocalTime = "2025-01-15 09:00:00", EndLocalTime = "2025-01-15 09:30:00", Name = "Away", GroupId = null },
+		};
+
+		var result = NarrativeTools.ClipToActiveIntervals(activities, usageActivities);
+		result.Should().BeEmpty();
+	}
+
+	[TestMethod]
+	public async Task GetActivityNarrative_DefaultIncludeSummary_OmitsTopData()
+	{
+		await using var harness = CreateHarness();
+		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
+		var result = await client.CallToolAsync(
+			"get_activity_narrative",
+			new Dictionary<string, object?>(StringComparer.Ordinal)
+			{
+				["startDate"] = "2025-01-15",
+				["endDate"] = "2025-01-16",
+				// No includeSummary — defaults to false now
+			}).ConfigureAwait(false);
+
+		result.IsError.Should().NotBeTrue();
+		var text = result.Content.OfType<TextContentBlock>().Single().Text;
+		var doc = JsonDocument.Parse(text);
+
+		doc.RootElement.GetProperty("segments").GetArrayLength().Should().BeGreaterThan(0);
+		doc.RootElement.GetProperty("topApplications").GetArrayLength().Should().Be(0);
+	}
+
+	[TestMethod]
+	public async Task GetActivityNarrative_MaxSegmentsParameter_LimitsOutput()
+	{
+		var manyActivities = GenerateAlternatingActivities(count: 50, minutesEach: 2);
+
+		await using var harness = new McpTestHarness((services, builder) =>
+		{
+			services.AddSingleton<ITimelineRepository>(new StubTimelineRepository(SampleTimelines));
+			services.AddSingleton<IActivityRepository>(new StubActivityRepository(
+				enrichedActivities: manyActivities));
+			services.AddSingleton<IUsageRepository>(new StubUsageRepository(
+				dailyApp: SampleDailyAppUsage));
+			services.AddSingleton(CreateFullCapabilities());
+			builder.WithTools<NarrativeTools>();
+		});
+		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
+		var result = await client.CallToolAsync(
+			"get_activity_narrative",
+			new Dictionary<string, object?>(StringComparer.Ordinal)
+			{
+				["startDate"] = "2025-01-15",
+				["endDate"] = "2025-01-16",
+				["maxSegments"] = 10,
+			}).ConfigureAwait(false);
+
+		result.IsError.Should().NotBeTrue();
+		var text = result.Content.OfType<TextContentBlock>().Single().Text;
+		var doc = JsonDocument.Parse(text);
+
+		doc.RootElement.GetProperty("segments").GetArrayLength().Should().Be(10);
+		doc.RootElement.GetProperty("truncation").GetProperty("truncated").GetBoolean().Should().BeTrue();
+		doc.RootElement.GetProperty("truncation").GetProperty("totalAvailable").GetInt32().Should().Be(50);
 	}
 
 	#endregion

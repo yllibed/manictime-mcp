@@ -247,6 +247,57 @@ public sealed class ScreenshotService : IScreenshotService
 		}
 	}
 
+	/// <inheritdoc />
+	public long WriteScreenshot(byte[] data, string outputPath, string allowedRootDirectory)
+	{
+		var fullPath = Path.GetFullPath(outputPath);
+		var fullRoot = Path.GetFullPath(allowedRootDirectory);
+
+		// Ensure trailing separator for proper prefix check
+		if (!fullRoot.EndsWith(Path.DirectorySeparatorChar))
+		{
+			fullRoot += Path.DirectorySeparatorChar;
+		}
+
+		// Path traversal check
+		if (!fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
+		{
+			_logger.ScreenshotWritePathTraversalBlocked(outputPath);
+			return -1;
+		}
+
+		// Extension check — only .jpg and .png allowed
+		var ext = Path.GetExtension(fullPath);
+		if (!ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+			&& !ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+			&& !ext.Equals(".png", StringComparison.OrdinalIgnoreCase))
+		{
+			_logger.ScreenshotWriteInvalidExtension(outputPath);
+			return -1;
+		}
+
+		try
+		{
+			// Ensure directory exists
+			var dir = Path.GetDirectoryName(fullPath);
+			if (dir is not null && !Directory.Exists(dir))
+			{
+				Directory.CreateDirectory(dir);
+			}
+
+			File.WriteAllBytes(fullPath, data);
+			_logger.ScreenshotSaved(fullPath, data.Length);
+			return data.Length;
+		}
+#pragma warning disable CA1031 // Do not catch general exception types — file write may fail for many reasons
+		catch (Exception ex)
+#pragma warning restore CA1031
+		{
+			_logger.ScreenshotWriteFailed(fullPath, ex);
+			return -1;
+		}
+	}
+
 	private string? ResolveScreenshotDirectory()
 	{
 		var result = _resolver.Resolve();

@@ -295,4 +295,50 @@ public sealed class ScreenshotToolsV2Tests
 		var text = result.Content.OfType<TextContentBlock>().Single().Text;
 		text.Should().Contain("Invalid date format");
 	}
+
+	[TestMethod]
+	public async Task ListTools_ContainsSaveScreenshotTool()
+	{
+		await using var harness = CreateHarness();
+		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
+		var tools = await client.ListToolsAsync().ConfigureAwait(false);
+		tools.Select(t => t.Name).Should().Contain("save_screenshot");
+	}
+
+	[TestMethod]
+	public async Task SaveScreenshot_UnknownRef_ReturnsError()
+	{
+		await using var harness = CreateHarness();
+		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
+		var result = await client.CallToolAsync(
+			"save_screenshot",
+			new Dictionary<string, object?>(StringComparer.Ordinal)
+			{
+				["screenshotRef"] = "nonexistent",
+			}).ConfigureAwait(false);
+
+		result.IsError.Should().BeTrue();
+		var text = result.Content.OfType<TextContentBlock>().Single().Text;
+		text.Should().Contain("Unknown screenshotRef");
+	}
+
+	[TestMethod]
+	public void RootUriToLocalPath_ValidFileUri_ReturnsLocalPath()
+	{
+		var path = ScreenshotToolsV2.RootUriToLocalPath("file:///C:/Users/test/project");
+		path.Should().NotBeNull();
+		path.Should().Contain("Users");
+	}
+
+	[TestMethod]
+	public void RootUriToLocalPath_NonFileUri_ReturnsNull()
+	{
+		ScreenshotToolsV2.RootUriToLocalPath("https://example.com").Should().BeNull();
+	}
+
+	[TestMethod]
+	public void RootUriToLocalPath_InvalidUri_ReturnsNull()
+	{
+		ScreenshotToolsV2.RootUriToLocalPath("not a uri").Should().BeNull();
+	}
 }
