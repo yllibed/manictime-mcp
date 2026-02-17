@@ -21,4 +21,11 @@ public interface IScreenshotService
 	/// Returns null if the file does not exist, is not a .jpg, or fails security checks.
 	/// </summary>
 	byte[]? ReadScreenshot(string filePath);
+
+	/// <summary>
+	/// Writes screenshot bytes to the specified output path.
+	/// Validates the path is within the allowed root directory and uses an approved extension.
+	/// Returns the number of bytes written, or -1 if the write fails validation.
+	/// </summary>
+	long WriteScreenshot(byte[] data, string outputPath, string allowedRootDirectory);
 }

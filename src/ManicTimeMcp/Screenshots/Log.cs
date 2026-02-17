@@ -25,4 +25,16 @@ internal static partial class Log
 
 	[LoggerMessage(EventId = 3007, Level = LogLevel.Warning, Message = "Failed to extract bitmap subset for crop")]
 	internal static partial void CropExtractFailed(this ILogger logger);
+
+	[LoggerMessage(EventId = 3008, Level = LogLevel.Warning, Message = "Screenshot write path traversal attempt blocked: {FilePath}")]
+	internal static partial void ScreenshotWritePathTraversalBlocked(this ILogger logger, string filePath);
+
+	[LoggerMessage(EventId = 3009, Level = LogLevel.Warning, Message = "Screenshot write rejected for invalid extension: {FilePath}")]
+	internal static partial void ScreenshotWriteInvalidExtension(this ILogger logger, string filePath);
+
+	[LoggerMessage(EventId = 3010, Level = LogLevel.Information, Message = "Screenshot saved: {FilePath} ({Size} bytes)")]
+	internal static partial void ScreenshotSaved(this ILogger logger, string filePath, long size);
+
+	[LoggerMessage(EventId = 3011, Level = LogLevel.Warning, Message = "Failed to write screenshot: {FilePath}")]
+	internal static partial void ScreenshotWriteFailed(this ILogger logger, string filePath, Exception exception);
 }

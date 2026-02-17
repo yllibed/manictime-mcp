@@ -15,7 +15,8 @@ namespace ManicTimeMcp.Mcp;
 #pragma warning disable IL2026 // Trimming is disabled (PublishTrimmed=false); reflection-based JSON is safe
 public sealed class NarrativeTools
 {
-	private const int MaxSegments = 200;
+	private const int DefaultMaxSegments = 200;
+	private const int MaxSegmentsLimit = 2000;
 	private const int MaxTopApps = 50;
 	private const int MaxTopWebsites = 50;
 	private const int MaxPeriodDays = 31;
@@ -53,13 +54,14 @@ public sealed class NarrativeTools
 		[Description("Minimum segment duration in minutes to include (default 0). Useful for filtering noise — e.g. 0.5 filters sub-30s segments.")] double minDurationMinutes = 0,
 		[Description("Include hourly website breakdown (default false). Adds per-hour detail for each website.")] bool includeHourlyWebBreakdown = false,
 		[Description("Maximum gap in minutes between same-app segments to merge them (default 2). Reduces segment count by merging nearby blocks of the same application.")] double maxGapMinutes = 2.0,
+		[Description("Maximum number of segments to return (default 200, max 2000). Increase for full-day detail.")] int? maxSegments = null,
 		CancellationToken cancellationToken = default)
 	{
 		try
 		{
 			var parsed = DateTime.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
 			var endDate = parsed.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-			var response = await BuildNarrativeAsync(date, endDate, includeWebsites: true, includeSegments, minDurationMinutes, includeHourlyWebBreakdown, maxGapMinutes, includeSummary: true, cancellationToken).ConfigureAwait(false);
+			var response = await BuildNarrativeAsync(date, endDate, includeWebsites: true, includeSegments, minDurationMinutes, includeHourlyWebBreakdown, maxGapMinutes, includeSummary: true, maxSegments, cancellationToken).ConfigureAwait(false);
 			return ToolResults.Success(JsonSerializer.Serialize(response, JsonOptions.Default));
 		}
 		catch (FormatException ex)
@@ -84,12 +86,13 @@ public sealed class NarrativeTools
 		[Description("Include website usage (default true)")] bool includeWebsites = true,
 		[Description("Minimum segment duration in minutes to include (default 0). Useful for filtering noise — e.g. 0.5 filters sub-30s segments.")] double minDurationMinutes = 0,
 		[Description("Maximum gap in minutes between same-app segments to merge them (default 2). Reduces segment count by merging nearby blocks of the same application.")] double maxGapMinutes = 2.0,
-		[Description("Include topApplications and topWebsites summary data (default true). Set false to reduce payload when only segments are needed.")] bool includeSummary = true,
+		[Description("Include topApplications and topWebsites summary data (default false). Set true when you need aggregated top-app/top-website lists alongside segments.")] bool includeSummary = false,
+		[Description("Maximum number of segments to return (default 200, max 2000). Increase for full-day detail.")] int? maxSegments = null,
 		CancellationToken cancellationToken = default)
 	{
 		try
 		{
-			var response = await BuildNarrativeAsync(startDate, endDate, includeWebsites, includeSegments: true, minDurationMinutes, includeHourlyWebBreakdown: false, maxGapMinutes, includeSummary, cancellationToken).ConfigureAwait(false);
+			var response = await BuildNarrativeAsync(startDate, endDate, includeWebsites, includeSegments: true, minDurationMinutes, includeHourlyWebBreakdown: false, maxGapMinutes, includeSummary, maxSegments, cancellationToken).ConfigureAwait(false);
 			return ToolResults.Success(JsonSerializer.Serialize(response, JsonOptions.Default));
 		}
 		catch (FormatException ex)
@@ -176,10 +179,10 @@ public sealed class NarrativeTools
 	private async Task<NarrativeResponse> BuildNarrativeAsync(
 		string startDate, string endDate, bool includeWebsites, bool includeSegments,
 		double minDurationMinutes, bool includeHourlyWebBreakdown, double maxGapMinutes,
-		bool includeSummary = true, CancellationToken ct = default)
+		bool includeSummary = true, int? maxSegments = null, CancellationToken ct = default)
 	{
 		var (segments, totalMinutes, totalSegments, isTruncated) =
-			await BuildSegmentDataAsync(startDate, endDate, includeSegments, minDurationMinutes, maxGapMinutes, ct).ConfigureAwait(false);
+			await BuildSegmentDataAsync(startDate, endDate, includeSegments, minDurationMinutes, maxGapMinutes, maxSegments, ct).ConfigureAwait(false);
 
 		var suggestedScreenshots = ScreenshotSuggestionSelector.Select(segments);
 
@@ -216,7 +219,7 @@ public sealed class NarrativeTools
 
 	private async Task<(List<NarrativeSegment> Segments, double TotalMinutes, int TotalSegments, bool IsTruncated)>
 		BuildSegmentDataAsync(string startDate, string endDate, bool includeSegments,
-			double minDurationMinutes, double maxGapMinutes, CancellationToken ct)
+			double minDurationMinutes, double maxGapMinutes, int? maxSegments, CancellationToken ct)
 	{
 		if (!includeSegments)
 		{
@@ -230,7 +233,6 @@ public sealed class NarrativeTools
 		var endLocal = endDate + " 00:00:00";
 
 		var rawSegments = await BuildSegmentsAsync(startLocal, endLocal, ct).ConfigureAwait(false);
-		var totalMinutes = rawSegments.Sum(s => s.DurationMinutes);
 		var segments = MergeConsecutiveSegments(rawSegments, maxGapMinutes);
 
 		if (minDurationMinutes > 0)
@@ -238,11 +240,13 @@ public sealed class NarrativeTools
 			segments = segments.Where(s => s.DurationMinutes >= minDurationMinutes).ToList();
 		}
 
+		var totalMinutes = segments.Sum(s => s.DurationMinutes);
 		var totalSegments = segments.Count;
-		var isTruncated = segments.Count > MaxSegments;
+		var effectiveMaxSegments = Math.Min(maxSegments ?? DefaultMaxSegments, MaxSegmentsLimit);
+		var isTruncated = segments.Count > effectiveMaxSegments;
 		if (isTruncated)
 		{
-			segments = segments.Take(MaxSegments).ToList();
+			segments = segments.Take(effectiveMaxSegments).ToList();
 		}
 
 		return (segments, totalMinutes, totalSegments, isTruncated);
@@ -333,7 +337,18 @@ public sealed class NarrativeTools
 			appTimeline.ReportId, startLocal, endLocal,
 			limit: QueryLimits.MaxActivities, cancellationToken: ct);
 
-		// B5: Find Documents timeline for cross-timeline correlation
+		// Find ComputerUsage timeline for Active/Away clipping
+		var usageTimeline = timelines.FirstOrDefault(
+			t => t.SchemaName.Equals("ManicTime/ComputerUsage", StringComparison.OrdinalIgnoreCase) ||
+				 t.BaseSchemaName.Equals("ManicTime/ComputerUsage", StringComparison.OrdinalIgnoreCase));
+
+		var usageActivitiesTask = usageTimeline is not null
+			? _activityRepository.GetActivitiesAsync(
+				usageTimeline.ReportId, startLocal, endLocal,
+				limit: QueryLimits.MaxActivities, cancellationToken: ct)
+			: Task.FromResult<IReadOnlyList<Database.Dto.ActivityDto>>([]);
+
+		// Find Documents timeline for cross-timeline correlation
 		var docTimeline = timelines.FirstOrDefault(
 			t => t.SchemaName.Equals("ManicTime/Documents", StringComparison.OrdinalIgnoreCase) ||
 				 t.BaseSchemaName.Equals("ManicTime/Documents", StringComparison.OrdinalIgnoreCase));
@@ -352,12 +367,84 @@ public sealed class NarrativeTools
 			: Task.FromResult<IReadOnlyList<Database.Dto.ActivityDto>>([]);
 
 		var activities = await activitiesTask.ConfigureAwait(false);
+		var usageActivities = await usageActivitiesTask.ConfigureAwait(false);
 		var docActivities = await docActivitiesTask.ConfigureAwait(false);
 		var webActivities = await webActivitiesTask.ConfigureAwait(false);
 
+		// Clip application activities to Active intervals (excludes Away/Locked/Off time)
+		var clippedActivities = ClipToActiveIntervals(activities, usageActivities);
+
 		var screenshots = await LoadScreenshotsAsync(startLocal, endLocal, ct).ConfigureAwait(false);
 
-		return MapToSegments(activities, docActivities, webActivities, screenshots);
+		return MapToSegments(clippedActivities, docActivities, webActivities, screenshots);
+	}
+
+	/// <summary>
+	/// Clips enriched activities to only the intervals where the computer was Active.
+	/// Activities spanning Away/Locked/Off periods are split at Active boundaries.
+	/// If no ComputerUsage data is available, returns the original activities unchanged.
+	/// </summary>
+	internal static IReadOnlyList<Database.Dto.EnrichedActivityDto> ClipToActiveIntervals(
+		IReadOnlyList<Database.Dto.EnrichedActivityDto> activities,
+		IReadOnlyList<Database.Dto.ActivityDto> usageActivities)
+	{
+		if (usageActivities.Count == 0)
+		{
+			return activities; // Graceful degradation: no usage data → skip clipping
+		}
+
+		// Build active intervals from ComputerUsage timeline
+		var activeIntervals = new List<(DateTime Start, DateTime End)>();
+		foreach (var usage in usageActivities)
+		{
+			if (string.Equals(usage.Name, "Active", StringComparison.OrdinalIgnoreCase))
+			{
+				var start = DateTime.ParseExact(usage.StartLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+				var end = DateTime.ParseExact(usage.EndLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+				activeIntervals.Add((start, end));
+			}
+		}
+
+		if (activeIntervals.Count == 0)
+		{
+			return []; // Entire period was Away/Locked/Off
+		}
+
+		var result = new List<Database.Dto.EnrichedActivityDto>();
+
+		foreach (var activity in activities)
+		{
+			var actStart = DateTime.ParseExact(activity.StartLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+			var actEnd = DateTime.ParseExact(activity.EndLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+
+			foreach (var (intervalStart, intervalEnd) in activeIntervals)
+			{
+				if (intervalStart >= actEnd)
+				{
+					break; // Active intervals are sorted; no more overlaps possible
+				}
+
+				if (intervalEnd <= actStart)
+				{
+					continue;
+				}
+
+				// Compute intersection
+				var clippedStart = actStart > intervalStart ? actStart : intervalStart;
+				var clippedEnd = actEnd < intervalEnd ? actEnd : intervalEnd;
+
+				if (clippedEnd > clippedStart)
+				{
+					result.Add(activity with
+					{
+						StartLocalTime = clippedStart.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+						EndLocalTime = clippedEnd.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+					});
+				}
+			}
+		}
+
+		return result;
 	}
 
 	private async Task<IReadOnlyList<ScreenshotInfo>?> LoadScreenshotsAsync(
@@ -380,30 +467,108 @@ public sealed class NarrativeTools
 		return selection.Screenshots;
 	}
 
+	/// <summary>Known browser application names for website carry-forward logic.</summary>
+	private static readonly HashSet<string> BrowserAppNames = new(StringComparer.OrdinalIgnoreCase)
+	{
+		"Google Chrome", "Chrome", "Mozilla Firefox", "Firefox",
+		"Microsoft Edge", "Edge", "Brave Browser", "Brave",
+		"Opera", "Safari", "Vivaldi", "Arc",
+	};
+
 	private static List<NarrativeSegment> MapToSegments(
 		IReadOnlyList<Database.Dto.EnrichedActivityDto> activities,
 		IReadOnlyList<Database.Dto.ActivityDto> docActivities,
 		IReadOnlyList<Database.Dto.ActivityDto> webActivities,
 		IReadOnlyList<ScreenshotInfo>? screenshots)
 	{
+		string? lastKnownWebsite = null;
 		return activities
 			.Select(a =>
 			{
 				var startDt = DateTime.ParseExact(a.StartLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 				var endDt = DateTime.ParseExact(a.EndLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+				var appName = a.CommonGroupName ?? a.GroupName ?? a.Name;
+				var website = FindOverlappingWebsite(webActivities, startDt, endDt);
+
+				// Carry forward last known website for browser segments with no direct match
+				var isBrowser = appName is not null && BrowserAppNames.Contains(appName);
+				if (website is not null)
+				{
+					lastKnownWebsite = website;
+				}
+				else if (isBrowser && lastKnownWebsite is not null)
+				{
+					website = lastKnownWebsite;
+				}
+
 				return new NarrativeSegment
 				{
 					Start = a.StartLocalTime,
 					End = a.EndLocalTime,
 					DurationMinutes = Math.Round((endDt - startDt).TotalMinutes, digits: 1),
-					Application = a.CommonGroupName ?? a.GroupName ?? a.Name,
-					Document = FindOverlappingDocument(docActivities, startDt, endDt),
-					Website = FindOverlappingDocument(webActivities, startDt, endDt),
+					Application = appName,
+					Document = SanitizeDocumentName(FindOverlappingDocument(docActivities, startDt, endDt)),
+					Website = website,
 					Tags = a.Tags is { Length: > 0 } ? a.Tags : null,
 					ScreenshotRef = FindClosestScreenshot(screenshots, startDt, endDt),
 				};
 			})
 			.ToList();
+	}
+
+	/// <summary>Tolerance for website matching — allows a website activity that ended
+	/// shortly before the segment started to still count as a match.</summary>
+	private static readonly TimeSpan WebsiteMatchTolerance = TimeSpan.FromSeconds(5);
+
+	/// <summary>
+	/// Finds the website name from the WebSites activities that overlaps the given time range.
+	/// Uses a small tolerance to catch website activities that ended just before the segment.
+	/// </summary>
+	private static string? FindOverlappingWebsite(
+		IReadOnlyList<Database.Dto.ActivityDto> webActivities, DateTime segStart, DateTime segEnd)
+	{
+		if (webActivities.Count == 0)
+		{
+			return null;
+		}
+
+		string? bestName = null;
+		var bestOverlap = TimeSpan.Zero;
+
+		foreach (var web in webActivities)
+		{
+			var webStart = DateTime.ParseExact(web.StartLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+			if (webStart >= segEnd)
+			{
+				break; // Activities are sorted by start time; no more overlaps possible
+			}
+
+			var webEnd = DateTime.ParseExact(web.EndLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+
+			// Allow tolerance: website ended within tolerance before segment started
+			if (webEnd.Add(WebsiteMatchTolerance) <= segStart)
+			{
+				continue;
+			}
+
+			var overlapStart = webStart > segStart ? webStart : segStart;
+			var overlapEnd = webEnd < segEnd ? webEnd : segEnd;
+			var overlap = overlapEnd - overlapStart;
+
+			// If overlap is non-positive, the match is via tolerance only — use a minimal positive overlap
+			if (overlap <= TimeSpan.Zero)
+			{
+				overlap = TimeSpan.FromTicks(1);
+			}
+
+			if (overlap > bestOverlap)
+			{
+				bestOverlap = overlap;
+				bestName = web.Name;
+			}
+		}
+
+		return bestName;
 	}
 
 	/// <summary>
@@ -585,6 +750,8 @@ public sealed class NarrativeTools
 			End = b.End,
 			DurationMinutes = Math.Round((endDt - startDt).TotalMinutes, digits: 1),
 			Application = a.Application,
+			Document = a.Document ?? b.Document,
+			Website = a.Website ?? b.Website,
 			Tags = MergeTags(a.Tags, b.Tags),
 			ScreenshotRef = a.ScreenshotRef,
 		};
@@ -616,6 +783,29 @@ public sealed class NarrativeTools
 	/// </summary>
 	internal static bool IsValidWebsiteName(string name) =>
 		name.Length > 1;
+
+	/// <summary>
+	/// Sanitizes document names. Windows file paths (e.g. "C:\foo\bar.cs") are normalized to
+	/// file:/// URIs. Names already starting with "file:" are left unchanged.
+	/// </summary>
+	internal static string? SanitizeDocumentName(string? name)
+	{
+		if (name is null or { Length: 0 })
+		{
+			return null;
+		}
+
+		// Detect Windows-style absolute paths: drive letter followed by :\ or :/
+		if (name.Length >= 3
+			&& char.IsLetter(name[0])
+			&& name[1] == ':'
+			&& (name[2] == '\\' || name[2] == '/'))
+		{
+			return string.Concat("file:///", name.Replace('\\', '/'));
+		}
+
+		return name;
+	}
 
 	private async Task<List<AppUsageEntry>> GetTopAppsAsync(string startDate, string endDate, CancellationToken ct)
 	{

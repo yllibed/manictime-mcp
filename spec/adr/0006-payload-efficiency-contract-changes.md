@@ -17,7 +17,7 @@ Apply six contract changes to reduce payload size by ~35-50% for typical respons
 2. **Remove `applicationColor` from segments** — color remains available in `topApplications[].color`.
 3. **Flatten `refs` object to `screenshotRef`** — remove `timelineRef` and `activityRef` (opaque, unused by consumers), promote `screenshotRef` to a top-level segment field.
 4. **Gap-based segment merging** — add `maxGapMinutes` parameter (default 2.0) to `get_activity_narrative` and `get_daily_summary`. Same-app segments separated by gaps within the threshold are merged into continuous work blocks.
-5. **`includeSummary` parameter** — add to `get_activity_narrative` (default true). When false, skip `topApplications`/`topWebsites` computation.
+5. **`includeSummary` parameter** — add to `get_activity_narrative` (default false per ADR-0007). When true, include `topApplications`/`topWebsites` computation.
 6. **Raise default `minMinutes` for `get_website_usage`** — from 0 to 0.5, filtering sub-30s visits by default.
 
 ## Decision Drivers
@@ -51,7 +51,7 @@ Apply six contract changes to reduce payload size by ~35-50% for typical respons
 
 ### Neutral
 
-- `totalActiveMinutes` is unaffected — it uses the raw pre-merge sum, not merged segment durations.
+- `totalActiveMinutes` now uses post-merge sum (changed in ADR-0007) for consistency with pre-aggregated path.
 - Merged segment `durationMinutes` includes gap time (wall-clock span), representing continuous work blocks.
 
 ## Implementation Notes

@@ -4,6 +4,7 @@ using System.Text.Json;
 using ManicTimeMcp.Screenshots;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using McpServer = ModelContextProtocol.Server.McpServer;
 
 namespace ManicTimeMcp.Mcp;
 
@@ -106,6 +107,164 @@ public sealed class ScreenshotToolsV2
 		{
 			return ToolResults.Error($"Screenshot file error: {ex.Message}. Try reading the manictime://health resource to diagnose the issue.");
 		}
+	}
+
+	/// <summary>Saves a screenshot to the filesystem within a client-declared MCP root.</summary>
+	[McpServerTool(Name = "save_screenshot"), Description("Save a screenshot to disk. The output path must be within a client-declared MCP root directory. Returns the absolute path and file size.")]
+	public async Task<CallToolResult> SaveScreenshotAsync(
+		McpServer server,
+		[Description("Screenshot reference from list_screenshots")] string screenshotRef,
+		[Description("Relative path + filename (e.g. 'assets/screenshot-0930'). Extension (.jpg) is appended automatically if missing.")] string? outputPath = null,
+		[Description("Left edge for optional crop (percent 0-100 or normalized 0.0-1.0)")] double? cropX = null,
+		[Description("Top edge for optional crop")] double? cropY = null,
+		[Description("Width for optional crop")] double? cropWidth = null,
+		[Description("Height for optional crop")] double? cropHeight = null,
+		[Description("Coordinate units for crop: 'percent' (default) or 'normalized'")] string? coordinateUnits = null,
+		CancellationToken cancellationToken = default)
+	{
+		var info = _registry.TryResolve(screenshotRef);
+		if (info is null)
+		{
+			return ToolResults.Error("Unknown screenshotRef. Use list_screenshots to discover valid references.");
+		}
+
+		var roots = await ResolveClientRootsAsync(server, cancellationToken).ConfigureAwait(false);
+		if (roots is null)
+		{
+			return ToolResults.Error("Client does not support MCP roots. Configure roots in your MCP client to use save_screenshot.");
+		}
+
+		if (roots.Count == 0)
+		{
+			return ToolResults.Error("No MCP roots declared by client. Configure at least one root directory to use save_screenshot.");
+		}
+
+		var bytes = ReadFullSizeScreenshot(info);
+		if (bytes is null)
+		{
+			return ToolResults.Error("Screenshot file not found or inaccessible.");
+		}
+
+		bytes = ApplyOptionalCrop(bytes, cropX, cropY, cropWidth, cropHeight, coordinateUnits);
+		if (bytes is null)
+		{
+			return ToolResults.Error("Crop failed. The image may be corrupted or the crop region is invalid.");
+		}
+
+		var fileName = BuildOutputFileName(outputPath, info);
+		return WriteToFirstMatchingRoot(bytes, fileName, roots);
+	}
+
+	private static async Task<IList<Root>?> ResolveClientRootsAsync(
+		McpServer server, CancellationToken ct)
+	{
+		try
+		{
+			if (server.ClientCapabilities?.Roots is null)
+			{
+				return null;
+			}
+
+			var result = await server.RequestRootsAsync(new ListRootsRequestParams(), ct).ConfigureAwait(false);
+			return result.Roots;
+		}
+		catch (InvalidOperationException)
+		{
+			return null;
+		}
+	}
+
+	private byte[]? ReadFullSizeScreenshot(ScreenshotInfo info)
+	{
+		var fullPath = info.IsThumbnail ? GetFullSizePath(info.FilePath) : info.FilePath;
+		var bytes = fullPath is not null ? _screenshotService.ReadScreenshot(fullPath) : null;
+		return bytes ?? _screenshotService.ReadScreenshot(info.FilePath);
+	}
+
+	private byte[]? ApplyOptionalCrop(
+		byte[] bytes, double? cropX, double? cropY, double? cropWidth, double? cropHeight, string? coordinateUnits)
+	{
+		if (cropX is null || cropY is null || cropWidth is null || cropHeight is null)
+		{
+			return bytes;
+		}
+
+		var region = new CropRegion
+		{
+			X = cropX.Value, Y = cropY.Value,
+			Width = cropWidth.Value, Height = cropHeight.Value,
+			Units = ParseCoordinateUnits(coordinateUnits),
+		};
+		return _cropService.Crop(bytes, region);
+	}
+
+	private static string BuildOutputFileName(string? outputPath, ScreenshotInfo info)
+	{
+		var fileName = outputPath
+			?? $"screenshot-{info.LocalTimestamp.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}";
+		if (!fileName.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
+			&& !fileName.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase)
+			&& !fileName.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+		{
+			fileName += ".jpg";
+		}
+
+		return fileName;
+	}
+
+	private CallToolResult WriteToFirstMatchingRoot(byte[] bytes, string fileName, IList<Root> roots)
+	{
+		foreach (var root in roots)
+		{
+			if (!root.Uri.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
+			{
+				continue;
+			}
+
+			var rootDir = RootUriToLocalPath(root.Uri);
+			if (rootDir is null)
+			{
+				continue;
+			}
+
+			var absolutePath = Path.GetFullPath(Path.Combine(rootDir, fileName));
+			var normalizedRoot = Path.GetFullPath(rootDir);
+			if (!normalizedRoot.EndsWith(Path.DirectorySeparatorChar))
+			{
+				normalizedRoot += Path.DirectorySeparatorChar;
+			}
+
+			if (!absolutePath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase))
+			{
+				continue; // Path escapes this root — try next
+			}
+
+			var written = _screenshotService.WriteScreenshot(bytes, absolutePath, rootDir);
+			if (written < 0)
+			{
+				return ToolResults.Error("Failed to save screenshot. The path may be invalid or inaccessible.");
+			}
+
+			return ToolResults.Success(JsonSerializer.Serialize(new
+			{
+				path = absolutePath,
+				size = written,
+			}, JsonOptions.Default));
+		}
+
+		return ToolResults.Error(
+			$"Output path '{fileName}' does not resolve within any declared MCP root. Declared roots: {string.Join(", ", roots.Select(r => r.Uri))}");
+	}
+
+	/// <summary>Converts a file:/// URI to a local filesystem path.</summary>
+	internal static string? RootUriToLocalPath(string fileUri)
+	{
+		if (Uri.TryCreate(fileUri, UriKind.Absolute, out var uri) && uri.IsFile)
+		{
+			return uri.LocalPath;
+		}
+
+		return null;
 	}
 
 	private static CallToolResult BuildListResult(ScreenshotSelection selection)
