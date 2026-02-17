@@ -231,6 +231,84 @@ public sealed class HealthServiceTests
 
 	#endregion
 
+	#region GetHealthReport — version compatibility
+
+	[TestMethod]
+	public void GetHealthReport_MatchingVersion_NoUntestedIssue()
+	{
+		var resolver = new StubResolver(TestDataDir, DataDirectorySource.EnvironmentVariable);
+		var platform = new FakePlatformEnvironment
+		{
+			ExistingFiles = { TestDbPath },
+			FileSizes = { [TestDbPath] = 500 },
+			ExistingDirectories = { TestScreenshotDir },
+			DirectoriesWithFiles = { TestScreenshotDir },
+			RunningProcesses = { HealthService.ManicTimeProcessName },
+			ProcessIds = { [HealthService.ManicTimeProcessName] = TestProcessId },
+			ManicTimeInstallDir = TestInstallDir,
+			FileProductVersions = { [TestExePath] = TestVersion },
+		};
+
+		var sut = CreateService(resolver, platform);
+		var report = sut.GetHealthReport();
+
+		report.Issues.Should().NotContain(i => i.Code == IssueCode.ManicTimeVersionUntested);
+		report.TestedManicTimeVersion.Should().Be(HealthService.TestedManicTimeVersion);
+	}
+
+	[TestMethod]
+	public void GetHealthReport_DifferentVersion_EmitsUntestedWarning()
+	{
+		const string differentVersion = "2025.3.8.0";
+		var resolver = new StubResolver(TestDataDir, DataDirectorySource.EnvironmentVariable);
+		var platform = new FakePlatformEnvironment
+		{
+			ExistingFiles = { TestDbPath },
+			FileSizes = { [TestDbPath] = 500 },
+			ExistingDirectories = { TestScreenshotDir },
+			DirectoriesWithFiles = { TestScreenshotDir },
+			RunningProcesses = { HealthService.ManicTimeProcessName },
+			ProcessIds = { [HealthService.ManicTimeProcessName] = TestProcessId },
+			ManicTimeInstallDir = TestInstallDir,
+			FileProductVersions = { [TestExePath] = differentVersion },
+		};
+
+		var sut = CreateService(resolver, platform);
+		var report = sut.GetHealthReport();
+
+		report.ManicTimeVersion.Should().Be(differentVersion);
+		report.TestedManicTimeVersion.Should().Be(HealthService.TestedManicTimeVersion);
+		var issue = report.Issues.Should().ContainSingle(i => i.Code == IssueCode.ManicTimeVersionUntested).Subject;
+		issue.Severity.Should().Be(ValidationSeverity.Warning);
+		issue.Message.Should().Contain(differentVersion);
+		issue.Message.Should().Contain(HealthService.TestedManicTimeVersion);
+	}
+
+	[TestMethod]
+	public void GetHealthReport_VersionNotDetected_NoUntestedIssue()
+	{
+		var resolver = new StubResolver(TestDataDir, DataDirectorySource.EnvironmentVariable);
+		var platform = new FakePlatformEnvironment
+		{
+			ExistingFiles = { TestDbPath },
+			FileSizes = { [TestDbPath] = 500 },
+			ExistingDirectories = { TestScreenshotDir },
+			DirectoriesWithFiles = { TestScreenshotDir },
+			RunningProcesses = { HealthService.ManicTimeProcessName },
+			ProcessIds = { [HealthService.ManicTimeProcessName] = TestProcessId },
+			// No ManicTimeInstallDir — version will be null
+		};
+
+		var sut = CreateService(resolver, platform);
+		var report = sut.GetHealthReport();
+
+		report.ManicTimeVersion.Should().BeNull();
+		report.TestedManicTimeVersion.Should().Be(HealthService.TestedManicTimeVersion);
+		report.Issues.Should().NotContain(i => i.Code == IssueCode.ManicTimeVersionUntested);
+	}
+
+	#endregion
+
 	#region GetHealthReport — screenshot directory absent
 
 	[TestMethod]

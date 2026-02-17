@@ -331,6 +331,15 @@ public sealed class ScreenshotToolsV2Tests
 	}
 
 	[TestMethod]
+	public void RootUriToLocalPath_TwoSlashWindowsUri_ReturnsLocalPath()
+	{
+		// Claude Code sends roots as file://C:\path (two slashes, no empty authority)
+		var path = ScreenshotToolsV2.RootUriToLocalPath("file://C:\\src\\timesheets");
+		path.Should().NotBeNull();
+		path.Should().Contain("src");
+	}
+
+	[TestMethod]
 	public void RootUriToLocalPath_NonFileUri_ReturnsNull()
 	{
 		ScreenshotToolsV2.RootUriToLocalPath("https://example.com").Should().BeNull();

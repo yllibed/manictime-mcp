@@ -26,4 +26,7 @@ internal static partial class Log
 
 	[LoggerMessage(EventId = 1007, Level = LogLevel.Information, Message = "Health check completed: {Status} ({IssueCount} issues)")]
 	internal static partial void HealthCheckCompleted(this ILogger logger, HealthStatus status, int issueCount);
+
+	[LoggerMessage(EventId = 1008, Level = LogLevel.Warning, Message = "ManicTime version {Version} differs from tested version {TestedVersion}.")]
+	internal static partial void ManicTimeVersionUntested(this ILogger logger, string version, string testedVersion);
 }

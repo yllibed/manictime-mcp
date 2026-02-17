@@ -18,6 +18,9 @@ public sealed class HealthService : IHealthService
 	internal const string ScreenshotSearchPattern = "*.jpg";
 	internal const string ScreenshotRemediationHint = "Review ManicTime screenshot capture and retention settings.";
 
+	/// <summary>ManicTime desktop version that this MCP server was validated against.</summary>
+	internal const string TestedManicTimeVersion = "2025.3.5.0";
+
 	private readonly IDataDirectoryResolver _resolver;
 	private readonly IPlatformEnvironment _platform;
 	private readonly ISchemaValidator _schemaValidator;
@@ -49,7 +52,7 @@ public sealed class HealthService : IHealthService
 		var (dbExists, dbSize) = CheckDatabase(directoryResult.Path, issues);
 		var schemaStatus = CheckSchema(directoryResult.Path, dbExists, issues);
 		var (processRunning, processId) = CheckProcess(issues);
-		var version = CheckManicTimeVersion();
+		var version = CheckManicTimeVersion(issues);
 		var screenshots = CheckScreenshots(directoryResult.Path, issues);
 
 		var status = DeriveStatus(issues);
@@ -69,6 +72,7 @@ public sealed class HealthService : IHealthService
 			ManicTimeProcessRunning = processRunning,
 			ManicTimeProcessId = processId,
 			ManicTimeVersion = version,
+			TestedManicTimeVersion = TestedManicTimeVersion,
 			Screenshots = screenshots,
 			McpServerVersion = GetServerVersion(),
 			Capabilities = capabilities,
@@ -185,7 +189,7 @@ public sealed class HealthService : IHealthService
 		return (running, pid);
 	}
 
-	private string? CheckManicTimeVersion()
+	private string? CheckManicTimeVersion(List<ValidationIssue> issues)
 	{
 		var installDir = _platform.GetManicTimeInstallDir();
 		if (installDir is null)
@@ -194,7 +198,21 @@ public sealed class HealthService : IHealthService
 		}
 
 		var exePath = Path.Combine(installDir, ManicTimeExeName);
-		return _platform.GetFileProductVersion(exePath);
+		var version = _platform.GetFileProductVersion(exePath);
+
+		if (version is not null && !string.Equals(version, TestedManicTimeVersion, StringComparison.Ordinal))
+		{
+			_logger.ManicTimeVersionUntested(version, TestedManicTimeVersion);
+			issues.Add(new ValidationIssue
+			{
+				Code = IssueCode.ManicTimeVersionUntested,
+				Severity = ValidationSeverity.Warning,
+				Message = $"Detected ManicTime {version}; this server was tested with {TestedManicTimeVersion}.",
+				Remediation = "Verify MCP tool results are accurate. Report issues at https://github.com/yllibed/manictime-mcp.",
+			});
+		}
+
+		return version;
 	}
 
 	private ScreenshotAvailability CheckScreenshots(string? dataDirectory, List<ValidationIssue> issues)

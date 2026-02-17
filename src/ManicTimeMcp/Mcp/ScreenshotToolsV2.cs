@@ -216,11 +216,6 @@ public sealed class ScreenshotToolsV2
 	{
 		foreach (var root in roots)
 		{
-			if (!root.Uri.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
-			{
-				continue;
-			}
-
 			var rootDir = RootUriToLocalPath(root.Uri);
 			if (rootDir is null)
 			{
