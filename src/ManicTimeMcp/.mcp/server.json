@@ -1,0 +1,20 @@
+{
+	"$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+	"name": "io.github.yllibed/ManicTimeMcp",
+	"description": "MCP server for read-only access to local ManicTime activity data",
+	"version": "0.2",
+	"repository": {
+		"url": "https://github.com/yllibed/manictime-mcp",
+		"source": "github"
+	},
+	"packages": [
+		{
+			"registryType": "nuget",
+			"identifier": "ManicTimeMcp",
+			"transport": {
+				"type": "stdio"
+			},
+			"runtimeHint": "dnx"
+		}
+	]
+}
