@@ -77,7 +77,13 @@ jobs:
           }
 
       - name: Pack (dry-run)
-        run: dotnet pack src/ManicTimeMcp.slnx -c Release --no-restore -o ${{ runner.temp }}/packages
+        shell: pwsh
+        run: |
+          # PR builds produce only 'any' + win-x64 (skip win-arm64 to speed up CI)
+          $ridOverride = if ('${{ github.event_name }}' -eq 'pull_request') {
+            @('-p:RuntimeIdentifiers=win-x64;any', '-p:ToolPackageRuntimeIdentifiers=win-x64;any')
+          } else { @() }
+          dotnet pack src/ManicTimeMcp.slnx -c Release --no-restore -o '${{ runner.temp }}\packages' @ridOverride
 
       - name: Upload test results
         if: always()
