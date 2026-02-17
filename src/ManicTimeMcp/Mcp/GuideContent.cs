@@ -18,6 +18,7 @@ internal static class GuideContent
 		| get_tags | User-defined tags | Categorization |
 		| get_activity_narrative | Structured "what did I do?" | Single-day recap |
 		| get_period_summary | Multi-day overview with patterns | Weekly/monthly review |
+		| get_daily_summary | Daily activity summary (single-call recap) | Quick daily overview |
 		| get_website_usage | Website usage with hourly/daily breakdown | Web tracking |
 		| list_screenshots | Screenshot metadata (zero bytes) | Discovery |
 		| get_screenshot | Single screenshot (dual-audience) | Visual inspection |
@@ -35,7 +36,7 @@ internal static class GuideContent
 		## Playbooks
 
 		### Daily Recap
-		1. get_activity_narrative(startDate=DATE, endDate=DATE+1)
+		1. get_daily_summary(date=DATE, includeHourlyWebBreakdown=true) — single call for segments, top apps, websites, and hourly web detail
 		2. If suggestedScreenshots are present, call get_screenshot for 2-3 of them
 		3. Inspect each thumbnail and use crop_screenshot to extract the active window or focused content — crops are sharper and more meaningful for reports
 		4. Present segments, top apps, total active time with cropped visuals

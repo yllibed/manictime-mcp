@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using ManicTimeMcp.Models;
 
 namespace ManicTimeMcp.Database;
 
@@ -128,6 +129,25 @@ public sealed class QueryCapabilityMatrix
 		}
 
 		return degraded;
+	}
+
+	/// <summary>
+	/// Returns capability statuses with fallback information.
+	/// All capabilities except Tags have working fallbacks.
+	/// </summary>
+	public IReadOnlyList<CapabilityStatus> GetCapabilityStatuses()
+	{
+		return
+		[
+			new() { Name = "PreAggregatedAppUsage", Available = HasPreAggregatedAppUsage, FallbackActive = !HasPreAggregatedAppUsage },
+			new() { Name = "PreAggregatedWebUsage", Available = HasPreAggregatedWebUsage, FallbackActive = !HasPreAggregatedWebUsage },
+			new() { Name = "PreAggregatedDocUsage", Available = HasPreAggregatedDocUsage, FallbackActive = !HasPreAggregatedDocUsage },
+			new() { Name = "HourlyUsage", Available = HasHourlyUsage, FallbackActive = !HasHourlyUsage },
+			new() { Name = "CommonGroup", Available = HasCommonGroup, FallbackActive = !HasCommonGroup },
+			new() { Name = "Tags", Available = HasTags, FallbackActive = false },
+			new() { Name = "TimelineSummary", Available = HasTimelineSummary, FallbackActive = !HasTimelineSummary },
+			new() { Name = "Environment", Available = HasEnvironment, FallbackActive = false },
+		];
 	}
 
 	private bool Has(string tableName) =>

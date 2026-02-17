@@ -3,6 +3,7 @@ using AwesomeAssertions;
 using ManicTimeMcp.Database;
 using ManicTimeMcp.Database.Dto;
 using ManicTimeMcp.Mcp;
+using ManicTimeMcp.Mcp.Models;
 using ManicTimeMcp.Screenshots;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Protocol;
@@ -670,6 +671,138 @@ public sealed class NarrativeToolTests
 		// Second segment (09:00-10:00) — closest screenshot is at 09:30
 		segments[1].GetProperty("refs").GetProperty("screenshotRef").GetString().Should().Be("ref-09-30");
 	}
+
+	#region Unit tests for static helpers
+
+	[TestMethod]
+	public void MergeConsecutiveSegments_TotalNotInflatedByGaps()
+	{
+		// Two segments with a gap between them: 08:00-09:00 and 09:30-10:00
+		var segments = new List<NarrativeSegment>
+		{
+			new()
+			{
+				Start = "2025-01-15 08:00:00", End = "2025-01-15 09:00:00",
+				DurationMinutes = 60.0, Application = "VS Code",
+			},
+			new()
+			{
+				Start = "2025-01-15 09:30:00", End = "2025-01-15 10:00:00",
+				DurationMinutes = 30.0, Application = "VS Code",
+			},
+		};
+
+		var rawTotal = segments.Sum(s => s.DurationMinutes);
+		rawTotal.Should().Be(90.0);
+
+		var merged = NarrativeTools.MergeConsecutiveSegments(segments);
+		// Merge produces one segment spanning 08:00-10:00 = 120 min (includes gap)
+		merged.Should().HaveCount(1);
+		merged[0].DurationMinutes.Should().Be(120.0);
+
+		// But the CORRECT totalActiveMinutes should use the raw sum (90 min), not the merged sum
+		// This test verifies the principle: raw total != merged total when gaps exist
+		rawTotal.Should().BeLessThan(merged.Sum(s => s.DurationMinutes));
+	}
+
+	[TestMethod]
+	public void MergeConsecutiveSegments_AbsorbsShortInterruptions()
+	{
+		// Terminal -> Chrome(20s) -> Terminal should collapse to one Terminal segment
+		var segments = new List<NarrativeSegment>
+		{
+			new()
+			{
+				Start = "2025-01-15 13:30:00", End = "2025-01-15 13:33:00",
+				DurationMinutes = 3.0, Application = "Terminal",
+			},
+			new()
+			{
+				Start = "2025-01-15 13:33:00", End = "2025-01-15 13:33:20",
+				DurationMinutes = 0.3, Application = "Chrome",
+			},
+			new()
+			{
+				Start = "2025-01-15 13:33:20", End = "2025-01-15 13:43:00",
+				DurationMinutes = 9.7, Application = "Terminal",
+			},
+		};
+
+		var merged = NarrativeTools.MergeConsecutiveSegments(segments);
+		merged.Should().HaveCount(1);
+		merged[0].Application.Should().Be("Terminal");
+		merged[0].Start.Should().Be("2025-01-15 13:30:00");
+		merged[0].End.Should().Be("2025-01-15 13:43:00");
+	}
+
+	[TestMethod]
+	public void MergeConsecutiveSegments_DoesNotAbsorbLongInterruptions()
+	{
+		// Terminal -> Chrome(5 min) -> Terminal should NOT collapse
+		var segments = new List<NarrativeSegment>
+		{
+			new()
+			{
+				Start = "2025-01-15 13:30:00", End = "2025-01-15 13:33:00",
+				DurationMinutes = 3.0, Application = "Terminal",
+			},
+			new()
+			{
+				Start = "2025-01-15 13:33:00", End = "2025-01-15 13:38:00",
+				DurationMinutes = 5.0, Application = "Chrome",
+			},
+			new()
+			{
+				Start = "2025-01-15 13:38:00", End = "2025-01-15 13:43:00",
+				DurationMinutes = 5.0, Application = "Terminal",
+			},
+		};
+
+		var merged = NarrativeTools.MergeConsecutiveSegments(segments);
+		merged.Should().HaveCount(3);
+	}
+
+	[TestMethod]
+	public void IsValidWebsiteName_FiltersBogusEntries()
+	{
+		NarrativeTools.IsValidWebsiteName("c").Should().BeFalse();
+		NarrativeTools.IsValidWebsiteName("").Should().BeFalse();
+		NarrativeTools.IsValidWebsiteName("github.com").Should().BeTrue();
+		NarrativeTools.IsValidWebsiteName("localhost").Should().BeTrue();
+		NarrativeTools.IsValidWebsiteName("go").Should().BeTrue();
+	}
+
+	#endregion
+
+	#region Capability statuses
+
+	[TestMethod]
+	public void GetCapabilityStatuses_ReturnsFallbackInfo()
+	{
+		var matrix = new QueryCapabilityMatrix([]);
+		var statuses = matrix.GetCapabilityStatuses();
+
+		statuses.Should().NotBeEmpty();
+		var appUsage = statuses.Single(s => string.Equals(s.Name, "PreAggregatedAppUsage", StringComparison.Ordinal));
+		appUsage.Available.Should().BeFalse();
+		appUsage.FallbackActive.Should().BeTrue();
+
+		var tags = statuses.Single(s => string.Equals(s.Name, "Tags", StringComparison.Ordinal));
+		tags.Available.Should().BeFalse();
+		tags.FallbackActive.Should().BeFalse();
+	}
+
+	[TestMethod]
+	public void GetCapabilityStatuses_FullCapabilities_AllAvailable()
+	{
+		var matrix = CreateFullCapabilities();
+		var statuses = matrix.GetCapabilityStatuses();
+
+		statuses.Should().OnlyContain(s => s.Available);
+		statuses.Should().OnlyContain(s => !s.FallbackActive);
+	}
+
+	#endregion
 
 	private static QueryCapabilityMatrix CreateFullCapabilities()
 	{

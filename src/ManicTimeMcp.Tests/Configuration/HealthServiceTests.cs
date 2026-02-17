@@ -311,7 +311,7 @@ public sealed class HealthServiceTests
 	#region GetHealthReport — degraded capabilities
 
 	[TestMethod]
-	public void GetHealthReport_AllSupplementalPresent_NoDegradedCapabilities()
+	public void GetHealthReport_AllSupplementalPresent_AllCapabilitiesAvailable()
 	{
 		var resolver = new StubResolver(TestDataDir, DataDirectorySource.EnvironmentVariable);
 		var platform = new FakePlatformEnvironment
@@ -327,11 +327,12 @@ public sealed class HealthServiceTests
 		var sut = CreateService(resolver, platform, capabilities: CreateFullCapabilities());
 		var report = sut.GetHealthReport();
 
-		report.DegradedCapabilities.Should().BeNull();
+		report.Capabilities.Should().NotBeNull();
+		report.Capabilities!.Should().OnlyContain(c => c.Available);
 	}
 
 	[TestMethod]
-	public void GetHealthReport_NoSupplementalTables_ReportsDegradedCapabilities()
+	public void GetHealthReport_NoSupplementalTables_ReportsCapabilitiesWithFallback()
 	{
 		var resolver = new StubResolver(TestDataDir, DataDirectorySource.EnvironmentVariable);
 		var platform = new FakePlatformEnvironment
@@ -347,11 +348,17 @@ public sealed class HealthServiceTests
 		var sut = CreateService(resolver, platform, capabilities: CreateCoreOnlyCapabilities());
 		var report = sut.GetHealthReport();
 
-		report.DegradedCapabilities.Should().NotBeNull();
-		report.DegradedCapabilities.Should().NotBeEmpty();
-		report.DegradedCapabilities.Should().Contain("PreAggregatedAppUsage");
-		report.DegradedCapabilities.Should().Contain("Tags");
-		report.DegradedCapabilities.Should().Contain("Environment");
+		report.Capabilities.Should().NotBeNull();
+		var unavailable = report.Capabilities!.Where(c => !c.Available).ToList();
+		unavailable.Should().NotBeEmpty();
+		unavailable.Select(c => c.Name).Should().Contain("PreAggregatedAppUsage");
+		unavailable.Select(c => c.Name).Should().Contain("Tags");
+		unavailable.Select(c => c.Name).Should().Contain("Environment");
+		// Tags has no fallback, but app/web/doc usage do
+		var tags = unavailable.Single(c => string.Equals(c.Name, "Tags", StringComparison.Ordinal));
+		tags.FallbackActive.Should().BeFalse();
+		var appUsage = unavailable.Single(c => string.Equals(c.Name, "PreAggregatedAppUsage", StringComparison.Ordinal));
+		appUsage.FallbackActive.Should().BeTrue();
 	}
 
 	[TestMethod]

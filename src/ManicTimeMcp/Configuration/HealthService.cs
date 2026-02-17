@@ -1,3 +1,4 @@
+using System.Reflection;
 using ManicTimeMcp.Database;
 using ManicTimeMcp.Models;
 using Microsoft.Extensions.Logging;
@@ -55,7 +56,7 @@ public sealed class HealthService : IHealthService
 
 		_logger.HealthCheckCompleted(status, issues.Count);
 
-		var degraded = _capabilities.GetDegradedCapabilities();
+		var capabilities = _capabilities.GetCapabilityStatuses();
 
 		return new HealthReport
 		{
@@ -69,7 +70,8 @@ public sealed class HealthService : IHealthService
 			ManicTimeProcessId = processId,
 			ManicTimeVersion = version,
 			Screenshots = screenshots,
-			DegradedCapabilities = degraded.Count > 0 ? degraded : null,
+			McpServerVersion = GetServerVersion(),
+			Capabilities = capabilities,
 			Issues = issues.AsReadOnly(),
 		};
 	}
@@ -253,4 +255,9 @@ public sealed class HealthService : IHealthService
 			Reason = ScreenshotUnavailableReason.None,
 		};
 	}
+
+	internal static string GetServerVersion() =>
+		typeof(HealthService).Assembly
+			.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+			?.InformationalVersion ?? "unknown";
 }

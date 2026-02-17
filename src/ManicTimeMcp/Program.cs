@@ -17,7 +17,10 @@ builder.Services
 	.AddManicTimeConfiguration()
 	.AddManicTimeDatabase()
 	.AddManicTimeScreenshots()
-	.AddMcpServer()
+	.AddMcpServer(options =>
+	{
+		options.ServerInfo = new() { Name = "ManicTime MCP", Version = HealthService.GetServerVersion() };
+	})
 	.WithStdioServerTransport()
 	.WithTools<TimelineTools>()
 	.WithTools<ActivityTools>()

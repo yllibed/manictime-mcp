@@ -51,13 +51,14 @@ public sealed class NarrativeTools
 		[Description("Date to summarize (ISO-8601, e.g. 2025-01-15)")] string date,
 		[Description("Include activity segments in response (default true). Set false to reduce payload when only summary data needed.")] bool includeSegments = true,
 		[Description("Minimum segment duration in minutes to include (default 0). Useful for filtering noise — e.g. 0.5 filters sub-30s segments.")] double minDurationMinutes = 0,
+		[Description("Include hourly website breakdown (default false). Adds per-hour detail for each website.")] bool includeHourlyWebBreakdown = false,
 		CancellationToken cancellationToken = default)
 	{
 		try
 		{
 			var parsed = DateTime.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
 			var endDate = parsed.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-			var response = await BuildNarrativeAsync(date, endDate, includeWebsites: true, includeSegments, minDurationMinutes, cancellationToken).ConfigureAwait(false);
+			var response = await BuildNarrativeAsync(date, endDate, includeWebsites: true, includeSegments, minDurationMinutes, includeHourlyWebBreakdown, cancellationToken).ConfigureAwait(false);
 			return ToolResults.Success(JsonSerializer.Serialize(response, JsonOptions.Default));
 		}
 		catch (FormatException ex)
@@ -85,7 +86,7 @@ public sealed class NarrativeTools
 	{
 		try
 		{
-			var response = await BuildNarrativeAsync(startDate, endDate, includeWebsites, includeSegments: true, minDurationMinutes, cancellationToken).ConfigureAwait(false);
+			var response = await BuildNarrativeAsync(startDate, endDate, includeWebsites, includeSegments: true, minDurationMinutes, includeHourlyWebBreakdown: false, cancellationToken).ConfigureAwait(false);
 			return ToolResults.Success(JsonSerializer.Serialize(response, JsonOptions.Default));
 		}
 		catch (FormatException ex)
@@ -140,6 +141,7 @@ public sealed class NarrativeTools
 		[Description("Start date (ISO-8601, inclusive)")] string startDate,
 		[Description("End date (ISO-8601, exclusive, max 31 days)")] string endDate,
 		[Description("Maximum number of websites (default 50, max 200)")] int? limit = null,
+		[Description("Minimum total minutes to include a website (default 0). Use 0.5 or 1.0 to filter noise.")] double minMinutes = 0,
 		CancellationToken cancellationToken = default)
 	{
 		try
@@ -151,7 +153,7 @@ public sealed class NarrativeTools
 				return ToolResults.Error($"Date range exceeds maximum of {MaxPeriodDays} days.");
 			}
 
-			var response = await BuildWebsiteUsageAsync(startDate, endDate, rangeDays, limit, cancellationToken).ConfigureAwait(false);
+			var response = await BuildWebsiteUsageAsync(startDate, endDate, rangeDays, limit, minMinutes, cancellationToken).ConfigureAwait(false);
 			return ToolResults.Success(JsonSerializer.Serialize(response, JsonOptions.Default));
 		}
 		catch (FormatException ex)
@@ -170,7 +172,7 @@ public sealed class NarrativeTools
 
 	private async Task<NarrativeResponse> BuildNarrativeAsync(
 		string startDate, string endDate, bool includeWebsites, bool includeSegments,
-		double minDurationMinutes, CancellationToken ct)
+		double minDurationMinutes, bool includeHourlyWebBreakdown, CancellationToken ct)
 	{
 		var (segments, totalMinutes, totalSegments, isTruncated) =
 			await BuildSegmentDataAsync(startDate, endDate, includeSegments, minDurationMinutes, ct).ConfigureAwait(false);
@@ -182,6 +184,10 @@ public sealed class NarrativeTools
 			? await GetTopWebsitesAsync(startDate, endDate, ct).ConfigureAwait(false)
 			: null;
 
+		var hourlyWeb = includeHourlyWebBreakdown
+			? await BuildHourlyWebBreakdownAsync(startDate, endDate, MaxTopWebsites, ct).ConfigureAwait(false)
+			: null;
+
 		return new NarrativeResponse
 		{
 			StartDate = startDate,
@@ -191,6 +197,7 @@ public sealed class NarrativeTools
 			TopApplications = topApps,
 			TopWebsites = topWebsites,
 			SuggestedScreenshots = suggestedScreenshots,
+			HourlyWebBreakdown = hourlyWeb is { Count: > 0 } ? hourlyWeb : null,
 			Truncation = new TruncationInfo
 			{
 				Truncated = isTruncated,
@@ -217,8 +224,8 @@ public sealed class NarrativeTools
 		var endLocal = endDate + " 00:00:00";
 
 		var rawSegments = await BuildSegmentsAsync(startLocal, endLocal, ct).ConfigureAwait(false);
+		var totalMinutes = rawSegments.Sum(s => s.DurationMinutes);
 		var segments = MergeConsecutiveSegments(rawSegments);
-		var totalMinutes = segments.Sum(s => s.DurationMinutes);
 
 		if (minDurationMinutes > 0)
 		{
@@ -275,7 +282,7 @@ public sealed class NarrativeTools
 	}
 
 	private async Task<WebsiteUsageResponse> BuildWebsiteUsageAsync(
-		string startDate, string endDate, int rangeDays, int? limit, CancellationToken ct)
+		string startDate, string endDate, int rangeDays, int? limit, double minMinutes, CancellationToken ct)
 	{
 		var effectiveLimit = Math.Min(limit ?? MaxTopWebsites, MaxWebsites);
 		var useHourly = rangeDays <= 7;
@@ -283,6 +290,11 @@ public sealed class NarrativeTools
 		var websites = useHourly
 			? await BuildHourlyWebBreakdownAsync(startDate, endDate, effectiveLimit, ct).ConfigureAwait(false)
 			: await BuildDailyWebBreakdownAsync(startDate, endDate, effectiveLimit, ct).ConfigureAwait(false);
+
+		if (minMinutes > 0)
+		{
+			websites = websites.Where(w => w.TotalMinutes >= minMinutes).ToList();
+		}
 
 		return new WebsiteUsageResponse
 		{
@@ -326,12 +338,20 @@ public sealed class NarrativeTools
 				limit: QueryLimits.MaxActivities, cancellationToken: ct)
 			: Task.FromResult<IReadOnlyList<Database.Dto.ActivityDto>>([]);
 
+		var webActivitiesTask = docTimeline is not null
+			? _activityRepository.GetActivitiesWithGroupTypeAsync(
+				docTimeline.ReportId, startLocal, endLocal,
+				groupType: "ManicTime/WebSites",
+				limit: QueryLimits.MaxActivities, cancellationToken: ct)
+			: Task.FromResult<IReadOnlyList<Database.Dto.ActivityDto>>([]);
+
 		var activities = await activitiesTask.ConfigureAwait(false);
 		var docActivities = await docActivitiesTask.ConfigureAwait(false);
+		var webActivities = await webActivitiesTask.ConfigureAwait(false);
 
 		var screenshots = await LoadScreenshotsAsync(startLocal, endLocal, ct).ConfigureAwait(false);
 
-		return MapToSegments(activities, docActivities, screenshots);
+		return MapToSegments(activities, docActivities, webActivities, screenshots);
 	}
 
 	private async Task<IReadOnlyList<ScreenshotInfo>?> LoadScreenshotsAsync(
@@ -357,6 +377,7 @@ public sealed class NarrativeTools
 	private static List<NarrativeSegment> MapToSegments(
 		IReadOnlyList<Database.Dto.EnrichedActivityDto> activities,
 		IReadOnlyList<Database.Dto.ActivityDto> docActivities,
+		IReadOnlyList<Database.Dto.ActivityDto> webActivities,
 		IReadOnlyList<ScreenshotInfo>? screenshots)
 	{
 		return activities
@@ -372,6 +393,7 @@ public sealed class NarrativeTools
 					Application = a.CommonGroupName ?? a.GroupName ?? a.Name,
 					ApplicationColor = a.GroupColor,
 					Document = FindOverlappingDocument(docActivities, startDt, endDt),
+					Website = FindOverlappingDocument(webActivities, startDt, endDt),
 					Tags = a.Tags is { Length: > 0 } ? a.Tags : null,
 					Refs = new SegmentRefs
 					{
@@ -459,7 +481,10 @@ public sealed class NarrativeTools
 		return closest?.Ref;
 	}
 
-	/// <summary>Merges consecutive segments with the same application into single entries.</summary>
+	/// <summary>
+	/// Merges consecutive segments with the same application, then absorbs
+	/// short interruptions (&lt;30s) between same-app segments.
+	/// </summary>
 	internal static List<NarrativeSegment> MergeConsecutiveSegments(List<NarrativeSegment> segments)
 	{
 		if (segments.Count <= 1)
@@ -467,6 +492,15 @@ public sealed class NarrativeTools
 			return segments;
 		}
 
+		// Pass 1: merge consecutive same-app segments
+		var merged = MergeConsecutiveSameApp(segments);
+
+		// Pass 2: absorb short interruptions between same-app segments
+		return AbsorbShortInterruptions(merged);
+	}
+
+	private static List<NarrativeSegment> MergeConsecutiveSameApp(List<NarrativeSegment> segments)
+	{
 		var merged = new List<NarrativeSegment>(segments.Count);
 		var current = segments[0];
 
@@ -475,20 +509,7 @@ public sealed class NarrativeTools
 			var next = segments[i];
 			if (string.Equals(current.Application, next.Application, StringComparison.Ordinal))
 			{
-				// Merge: extend end time, sum duration, union tags, keep first ref
-				var endDt = DateTime.ParseExact(next.End, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-				var startDt = DateTime.ParseExact(current.Start, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-				var mergedTags = MergeTags(current.Tags, next.Tags);
-				current = new NarrativeSegment
-				{
-					Start = current.Start,
-					End = next.End,
-					DurationMinutes = Math.Round((endDt - startDt).TotalMinutes, digits: 1),
-					Application = current.Application,
-					ApplicationColor = current.ApplicationColor,
-					Tags = mergedTags,
-					Refs = current.Refs,
-				};
+				current = MergeTwo(current, next);
 			}
 			else
 			{
@@ -499,6 +520,65 @@ public sealed class NarrativeTools
 
 		merged.Add(current);
 		return merged;
+	}
+
+	/// <summary>
+	/// Absorbs sub-30s interruptions between same-app segments.
+	/// E.g. Terminal→Chrome(20s)→Terminal becomes one Terminal segment.
+	/// </summary>
+	private static List<NarrativeSegment> AbsorbShortInterruptions(List<NarrativeSegment> segments)
+	{
+		if (segments.Count < 3)
+		{
+			return segments;
+		}
+
+		bool changed;
+		var result = segments;
+		do
+		{
+			changed = false;
+			var next = new List<NarrativeSegment>(result.Count);
+			var i = 0;
+			while (i < result.Count)
+			{
+				if (i + 2 < result.Count
+					&& string.Equals(result[i].Application, result[i + 2].Application, StringComparison.Ordinal)
+					&& result[i + 1].DurationMinutes < 0.5)
+				{
+					// Absorb: extend first segment to cover all three
+					var combined = MergeTwo(MergeTwo(result[i], result[i + 1]), result[i + 2]);
+					next.Add(combined);
+					i += 3;
+					changed = true;
+				}
+				else
+				{
+					next.Add(result[i]);
+					i++;
+				}
+			}
+
+			result = next;
+		} while (changed && result.Count >= 3);
+
+		return result;
+	}
+
+	private static NarrativeSegment MergeTwo(NarrativeSegment a, NarrativeSegment b)
+	{
+		var endDt = DateTime.ParseExact(b.End, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+		var startDt = DateTime.ParseExact(a.Start, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+		return new NarrativeSegment
+		{
+			Start = a.Start,
+			End = b.End,
+			DurationMinutes = Math.Round((endDt - startDt).TotalMinutes, digits: 1),
+			Application = a.Application,
+			ApplicationColor = a.ApplicationColor,
+			Tags = MergeTags(a.Tags, b.Tags),
+			Refs = a.Refs,
+		};
 	}
 
 	private static string[]? MergeTags(string[]? a, string[]? b)
@@ -522,6 +602,12 @@ public sealed class NarrativeTools
 		return [.. set.Order(StringComparer.Ordinal)];
 	}
 
+	/// <summary>
+	/// Rejects bogus website names like single-character hostnames ("c") from misclassified file:// URIs.
+	/// </summary>
+	internal static bool IsValidWebsiteName(string name) =>
+		name.Length > 1;
+
 	private async Task<List<AppUsageEntry>> GetTopAppsAsync(string startDate, string endDate, CancellationToken ct)
 	{
 		var dailyUsage = await _usageRepository.GetDailyAppUsageAsync(
@@ -535,12 +621,14 @@ public sealed class NarrativeTools
 			startDate, endDate, cancellationToken: ct).ConfigureAwait(false);
 
 		return dailyWeb
+			.Where(d => IsValidWebsiteName(d.Name))
 			.GroupBy(d => d.Name, StringComparer.Ordinal)
 			.Select(g => new WebUsageEntry
 			{
 				Name = g.Key,
 				TotalMinutes = Math.Round(g.Sum(x => x.TotalSeconds) / 60.0, digits: 1),
 			})
+			.Where(w => w.TotalMinutes >= 0.5)
 			.OrderByDescending(w => w.TotalMinutes)
 			.Take(MaxTopWebsites)
 			.ToList();
@@ -627,6 +715,7 @@ public sealed class NarrativeTools
 			startDate, endDate, cancellationToken: ct).ConfigureAwait(false);
 
 		return hourly
+			.Where(h => IsValidWebsiteName(h.Name))
 			.GroupBy(h => h.Name, StringComparer.Ordinal)
 			.Select(g => new WebsiteBreakdown
 			{
@@ -653,6 +742,7 @@ public sealed class NarrativeTools
 			startDate, endDate, cancellationToken: ct).ConfigureAwait(false);
 
 		return daily
+			.Where(d => IsValidWebsiteName(d.Name))
 			.GroupBy(d => d.Name, StringComparer.Ordinal)
 			.Select(g => new WebsiteBreakdown
 			{

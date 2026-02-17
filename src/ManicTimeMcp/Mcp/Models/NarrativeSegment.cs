@@ -21,6 +21,9 @@ internal sealed class NarrativeSegment
 	/// <summary>Document name.</summary>
 	public string? Document { get; init; }
 
+	/// <summary>Active website during this segment (from Documents timeline, GroupType=WebSites).</summary>
+	public string? Website { get; init; }
+
 	/// <summary>Tags associated with this activity segment, or null if tag data unavailable.</summary>
 	public string[]? Tags { get; init; }
 

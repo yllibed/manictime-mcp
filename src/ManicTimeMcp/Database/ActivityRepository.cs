@@ -75,6 +75,63 @@ public sealed class ActivityRepository : IActivityRepository
 	}
 
 	/// <inheritdoc />
+	public Task<IReadOnlyList<ActivityDto>> GetActivitiesWithGroupTypeAsync(
+		long timelineId,
+		string startLocalTime,
+		string endLocalTime,
+		string groupType,
+		int? limit = null,
+		CancellationToken cancellationToken = default)
+	{
+		var effectiveLimit = QueryLimits.Clamp(limit, QueryLimits.DefaultActivities, QueryLimits.MaxActivities);
+
+		return SqliteRetryHelper.ExecuteWithRetryAsync<IReadOnlyList<ActivityDto>>(
+			_logger,
+			async ct =>
+			{
+				ct.ThrowIfCancellationRequested();
+
+				using var connection = _connectionFactory.CreateConnection();
+				using var command = connection.CreateCommand();
+				command.CommandText = """
+					SELECT a.ActivityId, a.ReportId, a.StartLocalTime, a.EndLocalTime, a.Name, a.GroupId
+					FROM Ar_Activity a
+					INNER JOIN Ar_Group g ON a.GroupId = g.GroupId AND a.ReportId = g.ReportId
+					WHERE a.ReportId = @timelineId
+					  AND a.StartLocalTime < @endLocalTime
+					  AND a.EndLocalTime > @startLocalTime
+					  AND g.GroupType = @groupType
+					ORDER BY a.StartLocalTime
+					LIMIT @limit
+					""";
+				command.Parameters.AddWithValue("@timelineId", timelineId);
+				command.Parameters.AddWithValue("@startLocalTime", startLocalTime);
+				command.Parameters.AddWithValue("@endLocalTime", endLocalTime);
+				command.Parameters.AddWithValue("@groupType", groupType);
+				command.Parameters.AddWithValue("@limit", effectiveLimit);
+
+				var results = new List<ActivityDto>();
+				using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+				while (await reader.ReadAsync(ct).ConfigureAwait(false))
+				{
+					results.Add(new ActivityDto
+					{
+						ActivityId = reader.GetInt64(0),
+						ReportId = reader.GetInt64(1),
+						StartLocalTime = reader.GetString(2),
+						EndLocalTime = reader.GetString(3),
+						Name = await reader.IsDBNullAsync(4, ct).ConfigureAwait(false) ? null : reader.GetString(4),
+						GroupId = await reader.IsDBNullAsync(5, ct).ConfigureAwait(false) ? null : reader.GetInt64(5),
+					});
+				}
+
+				_logger.QueryExecuted("GetActivitiesWithGroupType", results.Count);
+				return (IReadOnlyList<ActivityDto>)results.AsReadOnly();
+			},
+			cancellationToken);
+	}
+
+	/// <inheritdoc />
 	public Task<IReadOnlyList<EnrichedActivityDto>> GetEnrichedActivitiesAsync(
 		long timelineId,
 		string startLocalTime,

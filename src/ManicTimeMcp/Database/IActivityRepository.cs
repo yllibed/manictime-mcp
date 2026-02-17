@@ -28,6 +28,18 @@ public interface IActivityRepository
 		CancellationToken cancellationToken = default);
 
 	/// <summary>
+	/// Returns activities for the given timeline filtered by group type,
+	/// bounded by <see cref="QueryLimits.MaxActivities"/>.
+	/// </summary>
+	Task<IReadOnlyList<ActivityDto>> GetActivitiesWithGroupTypeAsync(
+		long timelineId,
+		string startLocalTime,
+		string endLocalTime,
+		string groupType,
+		int? limit = null,
+		CancellationToken cancellationToken = default);
+
+	/// <summary>
 	/// Returns groups for the given timeline, bounded by <see cref="QueryLimits.MaxGroups"/>.
 	/// </summary>
 	Task<IReadOnlyList<GroupDto>> GetGroupsAsync(long timelineId, CancellationToken cancellationToken = default);

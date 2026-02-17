@@ -24,6 +24,9 @@ internal sealed class NarrativeResponse
 	/// <summary>Curated screenshots suggested for inclusion in reports, or null if none available.</summary>
 	public List<SuggestedScreenshot>? SuggestedScreenshots { get; init; }
 
+	/// <summary>Hourly website breakdown, or null if not requested.</summary>
+	public List<WebsiteBreakdown>? HourlyWebBreakdown { get; init; }
+
 	/// <summary>Truncation info.</summary>
 	public required TruncationInfo Truncation { get; init; }
 

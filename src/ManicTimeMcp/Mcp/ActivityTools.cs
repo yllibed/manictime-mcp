@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 using ManicTimeMcp.Database;
+using ManicTimeMcp.Mcp.Models;
 using Microsoft.Data.Sqlite;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -120,8 +121,9 @@ public sealed class ActivityTools
 		{
 			var (startDay, endDay) = ParseDayRange(startDate, endDate);
 			var effectiveLimit = QueryLimits.Clamp(limit, QueryLimits.DefaultUsageLimit, QueryLimits.MaxDailyUsageRows);
-			var usage = await _usageRepository.GetDailyAppUsageAsync(
+			var rawUsage = await _usageRepository.GetDailyAppUsageAsync(
 				startDay, endDay, effectiveLimit, cancellationToken).ConfigureAwait(false);
+			var usage = ProjectToMinutes(rawUsage);
 
 			var degraded = !_capabilities.HasPreAggregatedAppUsage;
 			return ToolResults.Success(JsonSerializer.Serialize(new
@@ -132,7 +134,7 @@ public sealed class ActivityTools
 				usage,
 				truncation = new TruncationInfo
 				{
-					Truncated = usage.Count >= effectiveLimit,
+					Truncated = rawUsage.Count >= effectiveLimit,
 					ReturnedCount = usage.Count,
 					TotalAvailable = null as int?,
 				},
@@ -172,8 +174,9 @@ public sealed class ActivityTools
 		{
 			var (startDay, endDay) = ParseDayRange(startDate, endDate);
 			var effectiveLimit = QueryLimits.Clamp(limit, QueryLimits.DefaultUsageLimit, QueryLimits.MaxDailyUsageRows);
-			var usage = await _usageRepository.GetDailyDocUsageAsync(
+			var rawUsage = await _usageRepository.GetDailyDocUsageAsync(
 				startDay, endDay, effectiveLimit, cancellationToken).ConfigureAwait(false);
+			var usage = ProjectToMinutes(rawUsage);
 
 			var degraded = !_capabilities.HasPreAggregatedDocUsage;
 			return ToolResults.Success(JsonSerializer.Serialize(new
@@ -184,7 +187,7 @@ public sealed class ActivityTools
 				usage,
 				truncation = new TruncationInfo
 				{
-					Truncated = usage.Count >= effectiveLimit,
+					Truncated = rawUsage.Count >= effectiveLimit,
 					ReturnedCount = usage.Count,
 					TotalAvailable = null as int?,
 				},
@@ -322,5 +325,15 @@ public sealed class ActivityTools
 		_ = DateTime.ParseExact(endDate, "yyyy-MM-dd", CultureInfo.InvariantCulture);
 		return (startDate, endDate);
 	}
+
+	private static List<DailyUsageEntry> ProjectToMinutes(IReadOnlyList<Database.Dto.DailyUsageDto> usage) =>
+		usage.Select(u => new DailyUsageEntry
+		{
+			Day = u.Day,
+			Name = u.Name,
+			Color = u.Color,
+			Key = u.Key,
+			TotalMinutes = Math.Round(u.TotalSeconds / 60.0, digits: 1),
+		}).ToList();
 }
 #pragma warning restore IL2026

@@ -204,8 +204,8 @@ public sealed class UsageRepository : IUsageRepository
 					results.Add(new TimelineSummaryDto
 					{
 						ReportId = reader.GetInt64(0),
-						StartLocalTime = reader.GetString(1),
-						EndLocalTime = reader.GetString(2),
+						StartLocalTime = await reader.IsDBNullAsync(1, ct).ConfigureAwait(false) ? null : reader.GetString(1),
+						EndLocalTime = await reader.IsDBNullAsync(2, ct).ConfigureAwait(false) ? null : reader.GetString(2),
 					});
 				}
 
@@ -308,8 +308,8 @@ public sealed class UsageRepository : IUsageRepository
 					results.Add(new TimelineSummaryDto
 					{
 						ReportId = reader.GetInt64(0),
-						StartLocalTime = reader.GetString(1),
-						EndLocalTime = reader.GetString(2),
+						StartLocalTime = await reader.IsDBNullAsync(1, ct).ConfigureAwait(false) ? null : reader.GetString(1),
+						EndLocalTime = await reader.IsDBNullAsync(2, ct).ConfigureAwait(false) ? null : reader.GetString(2),
 					});
 				}
 
