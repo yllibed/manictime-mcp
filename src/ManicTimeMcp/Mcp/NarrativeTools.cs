@@ -46,7 +46,7 @@ public sealed class NarrativeTools
 	}
 
 	/// <summary>Returns a daily summary by delegating to narrative logic.</summary>
-	[McpServerTool(Name = "get_daily_summary", ReadOnly = true), Description("Get a structured summary of activity for a specific date, with segments, top applications, and websites.")]
+	[McpServerTool(Name = "get_daily_summary", ReadOnly = true), Description("Get a structured summary of activity for a specific date, with segments, top applications, and websites. Includes suggested screenshots for visual context — use get_screenshot to fetch them.")]
 	public async Task<CallToolResult> GetDailySummaryAsync(
 		[Description("Date to summarize (ISO-8601, e.g. 2025-01-15)")] string date,
 		[Description("Include activity segments in response (default true). Set false to reduce payload when only summary data needed.")] bool includeSegments = true,
@@ -75,7 +75,7 @@ public sealed class NarrativeTools
 	}
 
 	/// <summary>Returns a structured narrative for "what did I do?"</summary>
-	[McpServerTool(Name = "get_activity_narrative", ReadOnly = true), Description("Get a structured narrative of activities for a date range. Best for single-day 'what did I do?' queries.")]
+	[McpServerTool(Name = "get_activity_narrative", ReadOnly = true), Description("Get a structured narrative of activities for a date range. Best for single-day 'what did I do?' queries. Includes suggested screenshots when available.")]
 	public async Task<CallToolResult> GetActivityNarrativeAsync(
 		[Description("Start date (ISO-8601, inclusive)")] string startDate,
 		[Description("End date (ISO-8601, exclusive)")] string endDate,
@@ -172,42 +172,10 @@ public sealed class NarrativeTools
 		string startDate, string endDate, bool includeWebsites, bool includeSegments,
 		double minDurationMinutes, CancellationToken ct)
 	{
-		var (start, _) = ParseDates(startDate, endDate);
-		var startLocal = FormatLocalTime(start);
-		var endLocal = endDate + " 00:00:00";
+		var (segments, totalMinutes, totalSegments, isTruncated) =
+			await BuildSegmentDataAsync(startDate, endDate, includeSegments, minDurationMinutes, ct).ConfigureAwait(false);
 
-		List<NarrativeSegment> segments;
-		double totalMinutes;
-		int totalSegments;
-		var isTruncated = false;
-
-		if (includeSegments)
-		{
-			var rawSegments = await BuildSegmentsAsync(startLocal, endLocal, ct).ConfigureAwait(false);
-			segments = MergeConsecutiveSegments(rawSegments);
-			totalMinutes = segments.Sum(s => s.DurationMinutes);
-
-			if (minDurationMinutes > 0)
-			{
-				segments = segments.Where(s => s.DurationMinutes >= minDurationMinutes).ToList();
-			}
-
-			totalSegments = segments.Count;
-			isTruncated = segments.Count > MaxSegments;
-			if (isTruncated)
-			{
-				segments = segments.Take(MaxSegments).ToList();
-			}
-		}
-		else
-		{
-			// Compute totalMinutes without building full segment list — use app usage aggregate
-			var appUsage = await _usageRepository.GetDailyAppUsageAsync(
-				startDate, endDate, cancellationToken: ct).ConfigureAwait(false);
-			totalMinutes = Math.Round(appUsage.Sum(a => a.TotalSeconds) / 60.0, digits: 1);
-			totalSegments = 0;
-			segments = [];
-		}
+		var suggestedScreenshots = ScreenshotSuggestionSelector.Select(segments);
 
 		var topApps = await GetTopAppsAsync(startDate, endDate, ct).ConfigureAwait(false);
 		var topWebsites = includeWebsites
@@ -222,6 +190,7 @@ public sealed class NarrativeTools
 			Segments = segments,
 			TopApplications = topApps,
 			TopWebsites = topWebsites,
+			SuggestedScreenshots = suggestedScreenshots,
 			Truncation = new TruncationInfo
 			{
 				Truncated = isTruncated,
@@ -230,6 +199,40 @@ public sealed class NarrativeTools
 			},
 			Diagnostics = BuildDiagnostics(_capabilities.HasPreAggregatedAppUsage),
 		};
+	}
+
+	private async Task<(List<NarrativeSegment> Segments, double TotalMinutes, int TotalSegments, bool IsTruncated)>
+		BuildSegmentDataAsync(string startDate, string endDate, bool includeSegments,
+			double minDurationMinutes, CancellationToken ct)
+	{
+		if (!includeSegments)
+		{
+			var appUsage = await _usageRepository.GetDailyAppUsageAsync(
+				startDate, endDate, cancellationToken: ct).ConfigureAwait(false);
+			var total = Math.Round(appUsage.Sum(a => a.TotalSeconds) / 60.0, digits: 1);
+			return ([], total, 0, false);
+		}
+
+		var startLocal = FormatLocalTime(ParseDates(startDate, endDate).Start);
+		var endLocal = endDate + " 00:00:00";
+
+		var rawSegments = await BuildSegmentsAsync(startLocal, endLocal, ct).ConfigureAwait(false);
+		var segments = MergeConsecutiveSegments(rawSegments);
+		var totalMinutes = segments.Sum(s => s.DurationMinutes);
+
+		if (minDurationMinutes > 0)
+		{
+			segments = segments.Where(s => s.DurationMinutes >= minDurationMinutes).ToList();
+		}
+
+		var totalSegments = segments.Count;
+		var isTruncated = segments.Count > MaxSegments;
+		if (isTruncated)
+		{
+			segments = segments.Take(MaxSegments).ToList();
+		}
+
+		return (segments, totalMinutes, totalSegments, isTruncated);
 	}
 
 	private async Task<PeriodSummaryResponse> BuildPeriodSummaryAsync(

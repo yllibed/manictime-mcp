@@ -21,6 +21,9 @@ internal sealed class NarrativeResponse
 	/// <summary>Top websites by usage.</summary>
 	public List<WebUsageEntry>? TopWebsites { get; init; }
 
+	/// <summary>Curated screenshots suggested for inclusion in reports, or null if none available.</summary>
+	public List<SuggestedScreenshot>? SuggestedScreenshots { get; init; }
+
 	/// <summary>Truncation info.</summary>
 	public required TruncationInfo Truncation { get; init; }
 

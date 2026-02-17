@@ -25,7 +25,7 @@ internal static class GuideContent
 
 		## Decision Tree
 
-		- "What did I do today/yesterday?" -> get_activity_narrative
+		- "What did I do today/yesterday?" -> get_activity_narrative (check suggestedScreenshots for visual context)
 		- "How was my week/month?" -> get_period_summary
 		- "What websites did I use?" -> get_website_usage
 		- "What was I doing at 3pm?" -> get_activities (narrow range) + list_screenshots
@@ -36,7 +36,9 @@ internal static class GuideContent
 
 		### Daily Recap
 		1. get_activity_narrative(startDate=DATE, endDate=DATE+1)
-		2. Present segments, top apps, total active time
+		2. If suggestedScreenshots are present, call get_screenshot for 2-3 of them
+		3. Inspect each thumbnail and use crop_screenshot to extract the active window or focused content — crops are sharper and more meaningful for reports
+		4. Present segments, top apps, total active time with cropped visuals
 
 		### Weekly Recap
 		1. get_period_summary(startDate=MONDAY, endDate=NEXT_MONDAY)
@@ -71,6 +73,7 @@ internal static class GuideContent
 
 		## Communication Guidance
 
+		- When suggestedScreenshots are provided, fetch 2-3 with get_screenshot, then use crop_screenshot to extract the active window or key content region — include these crops in your response as visual anchors (they are full-resolution and far more readable than full-screen thumbnails)
 		- Use resolved display names (from CommonGroup) in user-facing responses
 		- Use Color values for visual formatting cues
 		- Key values (e.g., "chrome.exe") are internal — use Name for display
