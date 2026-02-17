@@ -8,39 +8,38 @@ A .NET [MCP](https://modelcontextprotocol.io) server that gives AI agents read-o
 
 ## Quick start
 
-Install as a .NET global tool:
+Requires the [.NET 10+ SDK](https://dotnet.microsoft.com/download/dotnet). Run directly with `dnx` — no install step needed:
 
 ```bash
-dotnet tool install -g ManicTimeMcp
+dnx -y ManicTimeMcp
 ```
 
-Then run it:
-
-```bash
-manictime-mcp
-```
-
-The server communicates over **stdio** and expects a local ManicTime Windows desktop installation with local storage.
+This downloads the latest version and starts the server over **stdio**. It expects a local ManicTime Windows desktop installation with local storage.
 
 ## Agent configuration
+
+### Visual Studio / VS Code (Copilot)
+
+The package embeds a `.mcp/server.json` manifest. Browse [ManicTimeMcp on NuGet.org](https://www.nuget.org/packages/ManicTimeMcp), open the **MCP Server** tab, and copy the configuration into your IDE.
+
+Or add manually to `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "manictime-mcp": {
+      "type": "stdio",
+      "command": "dnx",
+      "args": ["-y", "ManicTimeMcp"]
+    }
+  }
+}
+```
 
 ### Claude Code
 
 ```bash
-claude mcp add manictime-mcp -- dotnet tool run manictime-mcp
-```
-
-Or add to your project's `.mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "manictime-mcp": {
-      "command": "dotnet",
-      "args": ["tool", "run", "manictime-mcp"]
-    }
-  }
-}
+claude mcp add manictime-mcp -- dnx -y ManicTimeMcp
 ```
 
 ### Claude Desktop
@@ -51,8 +50,8 @@ Add to `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.jso
 {
   "mcpServers": {
     "manictime-mcp": {
-      "command": "dotnet",
-      "args": ["tool", "run", "manictime-mcp"]
+      "command": "dnx",
+      "args": ["-y", "ManicTimeMcp"]
     }
   }
 }
@@ -61,22 +60,7 @@ Add to `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.jso
 ### OpenAI Codex CLI
 
 ```bash
-codex mcp add manictime-mcp -- dotnet tool run manictime-mcp
-```
-
-### GitHub Copilot (VS Code)
-
-Add to `.vscode/mcp.json` in your workspace:
-
-```json
-{
-  "servers": {
-    "manictime-mcp": {
-      "command": "dotnet",
-      "args": ["tool", "run", "manictime-mcp"]
-    }
-  }
-}
+codex mcp add manictime-mcp -- dnx -y ManicTimeMcp
 ```
 
 ### Generic MCP JSON configuration
@@ -87,8 +71,8 @@ For any MCP-compatible client that accepts a JSON config:
 {
   "mcpServers": {
     "manictime-mcp": {
-      "command": "dotnet",
-      "args": ["tool", "run", "manictime-mcp"],
+      "command": "dnx",
+      "args": ["-y", "ManicTimeMcp"],
       "transportType": "stdio"
     }
   }
