@@ -6,7 +6,7 @@ on:
     branches: [main, develop, 'release/**']
 
 permissions:
-  contents: read
+  contents: write
   checks: write
 
 env:
@@ -76,7 +76,7 @@ jobs:
             Write-Host "Line coverage: ${lineRate}%, Branch coverage: ${branchRate}%"
           }
 
-      - name: Pack (dry-run)
+      - name: Pack
         shell: pwsh
         run: |
           # PR builds produce only 'any' + win-x64 (skip win-arm64 to speed up CI)
@@ -100,3 +100,108 @@ jobs:
           name: packages
           path: ${{ runner.temp }}/packages/*.nupkg
           retention-days: 14
+
+  publish-binaries:
+    name: Publish (${{ matrix.rid }})
+    needs: build-test-pack
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rid: ${{ fromJson(github.event_name == 'pull_request' && '["any","win-x64"]' || '["any","win-x64","win-arm64"]') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: ga
+
+      - name: Publish (platform-specific)
+        if: matrix.rid != 'any'
+        run: >-
+          dotnet publish src/ManicTimeMcp/ManicTimeMcp.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          -o publish/${{ matrix.rid }}
+
+      - name: Publish (portable)
+        if: matrix.rid == 'any'
+        run: >-
+          dotnet publish src/ManicTimeMcp/ManicTimeMcp.csproj
+          -c Release
+          -p:SelfContained=false
+          -p:PublishSingleFile=false
+          -p:PublishReadyToRun=false
+          -o publish/${{ matrix.rid }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: manictime-mcp-${{ matrix.rid }}
+          path: publish/${{ matrix.rid }}/ManicTimeMcp*
+          retention-days: 14
+
+  release:
+    name: GitHub Release
+    needs: [build-test-pack, publish-binaries]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: ga
+
+      - name: Install nbgv
+        run: dotnet tool install --global nbgv
+
+      - name: Resolve version
+        id: version
+        run: |
+          VERSION=$(nbgv get-version -v NuGetPackageVersion)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          # Zip each binary artifact (exclude .pdb and .xml)
+          for dir in artifacts/manictime-mcp-*/; do
+            rid=$(basename "$dir" | sed 's/manictime-mcp-//')
+            (cd "$dir" && zip -r "../../release-assets/manictime-mcp-${rid}.zip" . -x '*.pdb' '*.xml')
+          done
+          # Copy nupkg files
+          cp artifacts/packages/*.nupkg release-assets/ 2>/dev/null || true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          PRERELEASE_FLAG=""
+          if [[ "${{ steps.version.outputs.prerelease }}" == "true" ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          gh release create "v${VERSION}" release-assets/* \
+            --title "v${VERSION}" \
+            --generate-notes \
+            $PRERELEASE_FLAG
