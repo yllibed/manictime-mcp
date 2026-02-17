@@ -10,6 +10,13 @@ public interface IScreenshotService
 	ScreenshotSelection Select(ScreenshotQuery query);
 
 	/// <summary>
+	/// Lists screenshots matching the query, returning metadata only (no image bytes).
+	/// Each screenshot is registered with <see cref="IScreenshotRegistry"/> for later retrieval.
+	/// Supports both interval and activity-transition sampling strategies.
+	/// </summary>
+	Task<ScreenshotSelection> ListScreenshotsAsync(ScreenshotQuery query, CancellationToken cancellationToken = default);
+
+	/// <summary>
 	/// Reads the bytes of a screenshot file after validating the path is safe.
 	/// Returns null if the file does not exist, is not a .jpg, or fails security checks.
 	/// </summary>

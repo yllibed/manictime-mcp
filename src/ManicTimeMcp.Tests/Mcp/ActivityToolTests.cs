@@ -26,12 +26,24 @@ public sealed class ActivityToolTests
 		new() { ActivityId = 3, ReportId = 2, StartLocalTime = "2025-01-15 08:00:00", EndLocalTime = "2025-01-15 12:00:00", Name = "On", GroupId = null },
 	];
 
-	private static McpTestHarness CreateHarness()
+	private static readonly DailyUsageDto[] SampleDailyAppUsage =
+	[
+		new() { Day = "2025-01-15", Name = "VS Code", Color = "#007ACC", Key = "code.exe", TotalSeconds = 3600 },
+		new() { Day = "2025-01-15", Name = "Chrome", Color = "#4285F4", Key = "chrome.exe", TotalSeconds = 1800 },
+	];
+
+	private static McpTestHarness CreateHarness(
+		DailyUsageDto[]? dailyAppUsage = null,
+		DailyUsageDto[]? dailyDocUsage = null)
 	{
 		return new McpTestHarness((services, builder) =>
 		{
 			services.AddSingleton<ITimelineRepository>(new StubTimelineRepository(SampleTimelines));
 			services.AddSingleton<IActivityRepository>(new StubActivityRepository(SampleActivities));
+			services.AddSingleton<IUsageRepository>(new StubUsageRepository(
+				dailyApp: dailyAppUsage ?? SampleDailyAppUsage,
+				dailyDoc: dailyDocUsage));
+			services.AddSingleton(CreateFullCapabilities());
 			builder.WithTools<ActivityTools>();
 		});
 	}
@@ -49,7 +61,6 @@ public sealed class ActivityToolTests
 		toolNames.Should().Contain("get_tags");
 		toolNames.Should().Contain("get_application_usage");
 		toolNames.Should().Contain("get_document_usage");
-		toolNames.Should().Contain("get_daily_summary");
 	}
 
 	[TestMethod]
@@ -73,6 +84,31 @@ public sealed class ActivityToolTests
 	}
 
 	[TestMethod]
+	public async Task GetActivities_IncludesTruncationAndDiagnostics()
+	{
+		await using var harness = CreateHarness();
+		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
+		var result = await client.CallToolAsync(
+			"get_activities",
+			new Dictionary<string, object?>(StringComparer.Ordinal)
+			{
+				["timelineId"] = 1L,
+				["startDate"] = "2025-01-15",
+				["endDate"] = "2025-01-16",
+			}).ConfigureAwait(false);
+
+		var text = result.Content.OfType<TextContentBlock>().Single().Text;
+		var doc = JsonDocument.Parse(text);
+
+		var truncation = doc.RootElement.GetProperty("truncation");
+		truncation.GetProperty("truncated").GetBoolean().Should().BeFalse();
+		truncation.GetProperty("returnedCount").GetInt32().Should().Be(2);
+
+		var diag = doc.RootElement.GetProperty("diagnostics");
+		diag.GetProperty("degraded").GetBoolean().Should().BeFalse();
+	}
+
+	[TestMethod]
 	public async Task GetComputerUsage_ReturnsMatchingSchema()
 	{
 		await using var harness = CreateHarness();
@@ -89,28 +125,13 @@ public sealed class ActivityToolTests
 		var doc = JsonDocument.Parse(text);
 		doc.RootElement.GetProperty("schemaName").GetString().Should().Be("ManicTime/ComputerUsage");
 		doc.RootElement.GetProperty("count").GetInt32().Should().Be(1);
+
+		// Verify truncation block present
+		doc.RootElement.GetProperty("truncation").GetProperty("truncated").GetBoolean().Should().BeFalse();
 	}
 
 	[TestMethod]
-	public async Task GetDailySummary_ReturnsSummaryForDate()
-	{
-		await using var harness = CreateHarness();
-		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
-		var result = await client.CallToolAsync(
-			"get_daily_summary",
-			new Dictionary<string, object?>(StringComparer.Ordinal)
-			{
-				["date"] = "2025-01-15",
-			}).ConfigureAwait(false);
-
-		var text = result.Content.OfType<TextContentBlock>().Single().Text;
-		var doc = JsonDocument.Parse(text);
-		doc.RootElement.GetProperty("date").GetString().Should().Be("2025-01-15");
-		doc.RootElement.GetProperty("timelineSummaries").GetArrayLength().Should().BeGreaterThanOrEqualTo(1);
-	}
-
-	[TestMethod]
-	public async Task GetApplicationUsage_ReturnsApplicationActivities()
+	public async Task GetApplicationUsage_ReturnsDailyUsage()
 	{
 		await using var harness = CreateHarness();
 		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
@@ -124,8 +145,9 @@ public sealed class ActivityToolTests
 
 		var text = result.Content.OfType<TextContentBlock>().Single().Text;
 		var doc = JsonDocument.Parse(text);
-		doc.RootElement.GetProperty("schemaName").GetString().Should().Be("ManicTime/Applications");
 		doc.RootElement.GetProperty("count").GetInt32().Should().Be(2);
+		doc.RootElement.GetProperty("usage").GetArrayLength().Should().Be(2);
+		doc.RootElement.GetProperty("diagnostics").GetProperty("degraded").GetBoolean().Should().BeFalse();
 	}
 
 	[TestMethod]
@@ -147,20 +169,25 @@ public sealed class ActivityToolTests
 		text.Should().Contain("Invalid date format");
 	}
 
-	[TestMethod]
-	public async Task GetDailySummary_InvalidDateFormat_ReturnsIsError()
+	/// <summary>Creates a capability matrix with all supplemental tables present.</summary>
+	private static QueryCapabilityMatrix CreateFullCapabilities()
 	{
-		await using var harness = CreateHarness();
-		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
-		var result = await client.CallToolAsync(
-			"get_daily_summary",
-			new Dictionary<string, object?>(StringComparer.Ordinal)
-			{
-				["date"] = "not-a-date",
-			}).ConfigureAwait(false);
-
-		result.IsError.Should().BeTrue();
-		var text = result.Content.OfType<TextContentBlock>().Single().Text;
-		text.Should().Contain("Invalid date format");
+		return new QueryCapabilityMatrix([
+			"Ar_CommonGroup",
+			"Ar_ApplicationByDay",
+			"Ar_WebSiteByDay",
+			"Ar_DocumentByDay",
+			"Ar_ApplicationByYear",
+			"Ar_WebSiteByYear",
+			"Ar_DocumentByYear",
+			"Ar_ActivityByHour",
+			"Ar_TimelineSummary",
+			"Ar_Environment",
+			"Ar_Folder",
+			"Ar_Tag",
+			"Ar_ActivityTag",
+			"Ar_Category",
+			"Ar_CategoryGroup",
+		]);
 	}
 }

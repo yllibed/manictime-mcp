@@ -17,11 +17,16 @@ builder.Services
 	.AddManicTimeConfiguration()
 	.AddManicTimeDatabase()
 	.AddManicTimeScreenshots()
-	.AddMcpServer()
+	.AddMcpServer(options =>
+	{
+		options.ServerInfo = new() { Name = "ManicTime MCP", Version = HealthService.GetServerVersion() };
+	})
 	.WithStdioServerTransport()
 	.WithTools<TimelineTools>()
 	.WithTools<ActivityTools>()
-	.WithTools<ScreenshotTools>()
-	.WithResources<ManicTimeResources>();
+	.WithTools<NarrativeTools>()
+	.WithTools<ScreenshotToolsV2>()
+	.WithResources<ManicTimeResources>()
+	.WithPrompts<ManicTimePrompts>();
 
 await builder.Build().RunAsync().ConfigureAwait(false);

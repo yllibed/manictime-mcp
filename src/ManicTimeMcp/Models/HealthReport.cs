@@ -33,6 +33,12 @@ public sealed record HealthReport
 	/// <summary>Screenshot directory availability details.</summary>
 	public required ScreenshotAvailability Screenshots { get; init; }
 
+	/// <summary>MCP server version from AssemblyInformationalVersion.</summary>
+	public string? McpServerVersion { get; init; }
+
+	/// <summary>Capability statuses including fallback information.</summary>
+	public IReadOnlyList<CapabilityStatus>? Capabilities { get; init; }
+
 	/// <summary>All detected issues ordered by severity (fatal first, then warnings).</summary>
 	public required IReadOnlyList<ValidationIssue> Issues { get; init; }
 }

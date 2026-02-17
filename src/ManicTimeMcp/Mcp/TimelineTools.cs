@@ -27,7 +27,18 @@ public sealed class TimelineTools
 		try
 		{
 			var timelines = await _timelineRepository.GetTimelinesAsync(cancellationToken).ConfigureAwait(false);
-			return ToolResults.Success(JsonSerializer.Serialize(timelines, JsonOptions.Default));
+			return ToolResults.Success(JsonSerializer.Serialize(new
+			{
+				count = timelines.Count,
+				timelines,
+				truncation = new TruncationInfo
+				{
+					Truncated = false,
+					ReturnedCount = timelines.Count,
+					TotalAvailable = timelines.Count,
+				},
+				diagnostics = DiagnosticsInfo.Ok,
+			}, JsonOptions.Default));
 		}
 		catch (SqliteException ex)
 		{

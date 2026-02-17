@@ -10,4 +10,7 @@ public sealed record SchemaValidationResult
 
 	/// <summary>Schema issues found during validation, empty if valid.</summary>
 	public required IReadOnlyList<ValidationIssue> Issues { get; init; }
+
+	/// <summary>Capability matrix built from actual table presence. Null if validation was not performed.</summary>
+	public QueryCapabilityMatrix? Capabilities { get; init; }
 }

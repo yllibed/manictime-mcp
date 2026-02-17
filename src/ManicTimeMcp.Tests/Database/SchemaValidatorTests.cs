@@ -13,18 +13,19 @@ public sealed class SchemaValidatorTests
 	[TestMethod]
 	public void Validate_CompleteSchema_ReturnsValid()
 	{
-		using var fixture = FixtureDatabase.CreateStandard();
+		using var fixture = FixtureDatabase.CreateFull();
 		var sut = CreateValidator();
 
 		var result = sut.Validate(fixture.FilePath);
 
 		result.Status.Should().Be(SchemaValidationStatus.Valid);
 		result.Issues.Should().BeEmpty();
+		result.Capabilities.Should().NotBeNull();
 	}
 
 	#endregion
 
-	#region Missing tables
+	#region Missing core tables
 
 	[TestMethod]
 	public void Validate_MissingTimelineTable_ReturnsInvalid()
@@ -78,12 +79,12 @@ public sealed class SchemaValidatorTests
 		var result = sut.Validate(fixture.FilePath);
 
 		result.Status.Should().Be(SchemaValidationStatus.Invalid);
-		result.Issues.Count.Should().Be(3);
+		result.Issues.Count.Should().Be(18);
 	}
 
 	#endregion
 
-	#region Missing columns
+	#region Missing core columns
 
 	[TestMethod]
 	public void Validate_MissingSchemaNameColumn_ReturnsInvalid()
@@ -126,6 +127,123 @@ public sealed class SchemaValidatorTests
 		result.Issues.Should().Contain(i =>
 			i.Code == IssueCode.SchemaValidationFailed &&
 			i.Message.Contains("Name"));
+	}
+
+	#endregion
+
+	#region Tiered validation — supplemental missing = warning
+
+	[TestMethod]
+	public void Validate_CoreOnlySchema_ReturnsValidWithWarnings()
+	{
+		using var fixture = FixtureDatabase.CreateCoreOnly();
+		var sut = CreateValidator();
+
+		var result = sut.Validate(fixture.FilePath);
+
+		result.Status.Should().Be(SchemaValidationStatus.ValidWithWarnings);
+		result.Issues.Should().OnlyContain(i => i.Severity == ValidationSeverity.Warning);
+		result.Issues.Should().Contain(i => i.Code == IssueCode.SupplementalTableMissing);
+	}
+
+	[TestMethod]
+	public void Validate_CoreOnlySchema_CapabilityMatrixAllFalse()
+	{
+		using var fixture = FixtureDatabase.CreateCoreOnly();
+		var sut = CreateValidator();
+
+		var result = sut.Validate(fixture.FilePath);
+
+		result.Capabilities.Should().NotBeNull();
+		result.Capabilities!.HasPreAggregatedAppUsage.Should().BeFalse();
+		result.Capabilities.HasCommonGroup.Should().BeFalse();
+		result.Capabilities.HasTags.Should().BeFalse();
+		result.Capabilities.HasTimelineSummary.Should().BeFalse();
+		result.Capabilities.HasEnvironment.Should().BeFalse();
+	}
+
+	[TestMethod]
+	public void Validate_FullSchema_CapabilityMatrixAllTrue()
+	{
+		using var fixture = FixtureDatabase.CreateFull();
+		var sut = CreateValidator();
+
+		var result = sut.Validate(fixture.FilePath);
+
+		result.Capabilities.Should().NotBeNull();
+		result.Capabilities!.HasPreAggregatedAppUsage.Should().BeTrue();
+		result.Capabilities.HasPreAggregatedWebUsage.Should().BeTrue();
+		result.Capabilities.HasPreAggregatedDocUsage.Should().BeTrue();
+		result.Capabilities.HasHourlyUsage.Should().BeTrue();
+		result.Capabilities.HasCommonGroup.Should().BeTrue();
+		result.Capabilities.HasTags.Should().BeTrue();
+		result.Capabilities.HasTimelineSummary.Should().BeTrue();
+		result.Capabilities.HasEnvironment.Should().BeTrue();
+	}
+
+	[TestMethod]
+	public void Validate_PartialSupplemental_CapabilityMatrixCorrect()
+	{
+		using var fixture = FixtureDatabase.CreatePartial(
+			"Ar_Timeline", "Ar_Activity", "Ar_Group",
+			"Ar_CommonGroup", "Ar_ApplicationByDay");
+		var sut = CreateValidator();
+
+		var result = sut.Validate(fixture.FilePath);
+
+		result.Status.Should().Be(SchemaValidationStatus.ValidWithWarnings);
+		result.Capabilities!.HasPreAggregatedAppUsage.Should().BeTrue();
+		result.Capabilities.HasPreAggregatedWebUsage.Should().BeFalse();
+		result.Capabilities.HasTags.Should().BeFalse();
+	}
+
+	[TestMethod]
+	public void Validate_SupplementalTableMissingColumn_CapabilityExcluded()
+	{
+		// Ar_CommonGroup exists but is missing the 'Name' column.
+		// Even though the table is present, the capability should be false.
+		using var fixture = FixtureDatabase.CreateFullWithMissingColumn("Ar_CommonGroup", "Name");
+		var sut = CreateValidator();
+
+		var result = sut.Validate(fixture.FilePath);
+
+		result.Status.Should().Be(SchemaValidationStatus.ValidWithWarnings);
+		result.Capabilities!.HasCommonGroup.Should().BeFalse();
+		result.Capabilities.HasPreAggregatedAppUsage.Should().BeFalse();
+		result.Issues.Should().Contain(i =>
+			i.Code == IssueCode.SupplementalColumnMissing &&
+			i.Message.Contains("Name") &&
+			i.Message.Contains("Ar_CommonGroup"));
+	}
+
+	#endregion
+
+	#region Capability matrix
+
+	[TestMethod]
+	public void CapabilityMatrix_GetDegradedCapabilities_CoreOnly()
+	{
+		var matrix = new QueryCapabilityMatrix([]);
+
+		var degraded = matrix.GetDegradedCapabilities();
+
+		degraded.Should().Contain("PreAggregatedAppUsage");
+		degraded.Should().Contain("CommonGroup");
+		degraded.Should().Contain("Tags");
+		degraded.Should().Contain("TimelineSummary");
+		degraded.Should().Contain("Environment");
+	}
+
+	[TestMethod]
+	public void CapabilityMatrix_GetDegradedCapabilities_FullSchema_Empty()
+	{
+		using var fixture = FixtureDatabase.CreateFull();
+		var sut = CreateValidator();
+		var result = sut.Validate(fixture.FilePath);
+
+		var degraded = result.Capabilities!.GetDegradedCapabilities();
+
+		degraded.Should().BeEmpty();
 	}
 
 	#endregion

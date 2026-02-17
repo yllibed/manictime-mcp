@@ -11,4 +11,7 @@ public sealed record ScreenshotSelection
 
 	/// <summary>Whether the result was truncated by the max limit.</summary>
 	public required bool IsTruncated { get; init; }
+
+	/// <summary>Which sampling strategy was actually used for this selection.</summary>
+	public SamplingStrategy SamplingStrategyUsed { get; init; } = SamplingStrategy.Interval;
 }

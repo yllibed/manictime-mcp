@@ -49,9 +49,15 @@ public sealed class TimelineToolTests
 		result.Content.Should().ContainSingle();
 		var text = result.Content.OfType<TextContentBlock>().Single().Text;
 		var doc = JsonDocument.Parse(text);
-		doc.RootElement.GetArrayLength().Should().Be(2);
-		doc.RootElement[0].GetProperty("reportId").GetInt64().Should().Be(1);
-		doc.RootElement[0].GetProperty("schemaName").GetString().Should().Be("ManicTime/Applications");
+		doc.RootElement.GetProperty("count").GetInt32().Should().Be(2);
+		var timelines = doc.RootElement.GetProperty("timelines");
+		timelines.GetArrayLength().Should().Be(2);
+		timelines[0].GetProperty("reportId").GetInt64().Should().Be(1);
+		timelines[0].GetProperty("schemaName").GetString().Should().Be("ManicTime/Applications");
+
+		// Verify truncation block
+		doc.RootElement.GetProperty("truncation").GetProperty("truncated").GetBoolean().Should().BeFalse();
+		doc.RootElement.GetProperty("diagnostics").GetProperty("degraded").GetBoolean().Should().BeFalse();
 	}
 
 	[TestMethod]
@@ -70,6 +76,7 @@ public sealed class TimelineToolTests
 
 		var text = result.Content.OfType<TextContentBlock>().Single().Text;
 		var doc = JsonDocument.Parse(text);
-		doc.RootElement.GetArrayLength().Should().Be(0);
+		doc.RootElement.GetProperty("count").GetInt32().Should().Be(0);
+		doc.RootElement.GetProperty("timelines").GetArrayLength().Should().Be(0);
 	}
 }

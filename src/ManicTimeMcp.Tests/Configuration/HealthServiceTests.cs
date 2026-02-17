@@ -308,10 +308,115 @@ public sealed class HealthServiceTests
 
 	#endregion
 
+	#region GetHealthReport — degraded capabilities
+
+	[TestMethod]
+	public void GetHealthReport_AllSupplementalPresent_AllCapabilitiesAvailable()
+	{
+		var resolver = new StubResolver(TestDataDir, DataDirectorySource.EnvironmentVariable);
+		var platform = new FakePlatformEnvironment
+		{
+			ExistingFiles = { TestDbPath },
+			FileSizes = { [TestDbPath] = 1024 },
+			ExistingDirectories = { TestScreenshotDir },
+			DirectoriesWithFiles = { TestScreenshotDir },
+			RunningProcesses = { HealthService.ManicTimeProcessName },
+			ProcessIds = { [HealthService.ManicTimeProcessName] = TestProcessId },
+		};
+
+		var sut = CreateService(resolver, platform, capabilities: CreateFullCapabilities());
+		var report = sut.GetHealthReport();
+
+		report.Capabilities.Should().NotBeNull();
+		report.Capabilities!.Should().OnlyContain(c => c.Available);
+	}
+
+	[TestMethod]
+	public void GetHealthReport_NoSupplementalTables_ReportsCapabilitiesWithFallback()
+	{
+		var resolver = new StubResolver(TestDataDir, DataDirectorySource.EnvironmentVariable);
+		var platform = new FakePlatformEnvironment
+		{
+			ExistingFiles = { TestDbPath },
+			FileSizes = { [TestDbPath] = 1024 },
+			ExistingDirectories = { TestScreenshotDir },
+			DirectoriesWithFiles = { TestScreenshotDir },
+			RunningProcesses = { HealthService.ManicTimeProcessName },
+			ProcessIds = { [HealthService.ManicTimeProcessName] = TestProcessId },
+		};
+
+		var sut = CreateService(resolver, platform, capabilities: CreateCoreOnlyCapabilities());
+		var report = sut.GetHealthReport();
+
+		report.Capabilities.Should().NotBeNull();
+		var unavailable = report.Capabilities!.Where(c => !c.Available).ToList();
+		unavailable.Should().NotBeEmpty();
+		unavailable.Select(c => c.Name).Should().Contain("PreAggregatedAppUsage");
+		unavailable.Select(c => c.Name).Should().Contain("Tags");
+		unavailable.Select(c => c.Name).Should().Contain("Environment");
+		// Tags has no fallback, but app/web/doc usage do
+		var tags = unavailable.Single(c => string.Equals(c.Name, "Tags", StringComparison.Ordinal));
+		tags.FallbackActive.Should().BeFalse();
+		var appUsage = unavailable.Single(c => string.Equals(c.Name, "PreAggregatedAppUsage", StringComparison.Ordinal));
+		appUsage.FallbackActive.Should().BeTrue();
+	}
+
+	[TestMethod]
+	public void GetHealthReport_PopulatesCapabilityMatrixFromValidation()
+	{
+		// Start with an empty (fully degraded) capability matrix — mimics DI startup state
+		var capabilities = CreateCoreOnlyCapabilities();
+		capabilities.HasPreAggregatedAppUsage.Should().BeFalse("precondition: starts degraded");
+
+		// Stub validator returns capabilities with Ar_CommonGroup + Ar_ApplicationByDay present
+		var validator = new StubSchemaValidator
+		{
+			Result = new()
+			{
+				Status = SchemaValidationStatus.Valid,
+				Issues = [],
+				Capabilities = new QueryCapabilityMatrix([
+					"Ar_CommonGroup", "Ar_ApplicationByDay", "Ar_WebSiteByDay",
+					"Ar_Tag", "Ar_ActivityTag",
+				]),
+			},
+		};
+
+		var resolver = new StubResolver(TestDataDir, DataDirectorySource.EnvironmentVariable);
+		var platform = new FakePlatformEnvironment
+		{
+			ExistingFiles = { TestDbPath },
+			FileSizes = { [TestDbPath] = 1024 },
+			ExistingDirectories = { TestScreenshotDir },
+			DirectoriesWithFiles = { TestScreenshotDir },
+			RunningProcesses = { HealthService.ManicTimeProcessName },
+			ProcessIds = { [HealthService.ManicTimeProcessName] = TestProcessId },
+		};
+
+		var sut = CreateService(resolver, platform, schemaValidator: validator, capabilities: capabilities);
+		_ = sut.GetHealthReport();
+
+		// After health check, the DI singleton should be populated
+		capabilities.HasPreAggregatedAppUsage.Should().BeTrue("populated from validation");
+		capabilities.HasTags.Should().BeTrue("populated from validation");
+		capabilities.HasHourlyUsage.Should().BeFalse("Ar_ActivityByHour was not in validated tables");
+	}
+
+	#endregion
+
 	#region Helpers
 
-	private static HealthService CreateService(IDataDirectoryResolver resolver, IPlatformEnvironment platform, ISchemaValidator? schemaValidator = null) =>
-		new(resolver, platform, schemaValidator ?? new StubSchemaValidator(), NullLogger<HealthService>.Instance);
+	private static HealthService CreateService(IDataDirectoryResolver resolver, IPlatformEnvironment platform, ISchemaValidator? schemaValidator = null, QueryCapabilityMatrix? capabilities = null) =>
+		new(resolver, platform, schemaValidator ?? new StubSchemaValidator(), capabilities ?? CreateFullCapabilities(), NullLogger<HealthService>.Instance);
+
+	/// <summary>Creates a capability matrix where all supplemental tables are present.</summary>
+	private static QueryCapabilityMatrix CreateFullCapabilities() =>
+		new(SchemaManifest.Tables.Values
+			.Where(t => t.Tier != TableTier.Core)
+			.Select(t => t.TableName));
+
+	/// <summary>Creates a capability matrix where no supplemental tables are present.</summary>
+	private static QueryCapabilityMatrix CreateCoreOnlyCapabilities() => new([]);
 
 	private sealed class StubSchemaValidator : ISchemaValidator
 	{
