@@ -17,7 +17,7 @@ public sealed class ManicTimePrompts
 		var nextDay = parsed.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
 		return $"""
-			Use get_activity_narrative with startDate={date} and endDate={nextDay} to retrieve activity data, then synthesize a concise daily summary. Highlight top applications, total active time, and notable patterns. Prefer resolved names/colors over internal refs. If the response contains suggestedScreenshots, use get_screenshot to fetch 2-3 of them. After inspecting each thumbnail, use crop_screenshot to extract the most relevant region (e.g. the active window or focused content area) and include those crops in your report — cropped details are sharper and more meaningful than full-screen captures.
+			Use get_activity_narrative with startDate={date}, endDate={nextDay}, and includeSummary=true to retrieve activity data with top-app/top-website aggregates. Synthesize a concise daily summary highlighting top applications, total active time, and notable patterns. Prefer resolved names/colors over internal refs. If the response contains suggestedScreenshots, use get_screenshot to fetch 2-3 of them. After inspecting each thumbnail, use crop_screenshot to extract the most relevant region (e.g. the active window or focused content area). Use save_screenshot to persist the best crops to the project assets folder, then include them in your report — cropped details are sharper and more meaningful than full-screen captures.
 			""";
 	}
 
@@ -28,7 +28,7 @@ public sealed class ManicTimePrompts
 		[Description("End date (ISO-8601, e.g. 2025-01-20)")] string endDate)
 	{
 		return $"""
-			Use get_period_summary with startDate={startDate} and endDate={endDate} to retrieve multi-day activity data. Synthesize a weekly overview including busiest/quietest days, top applications and websites, day-of-week patterns, and total active hours. Prefer resolved labels in the final user-facing answer. For each notable day, consider using get_daily_summary then get_screenshot on suggested screenshots. Use crop_screenshot to extract the active window or key content area from each — cropped regions are more readable and informative than full-screen captures.
+			Use get_period_summary with startDate={startDate} and endDate={endDate} to retrieve multi-day activity data. Synthesize a weekly overview including busiest/quietest days, top applications and websites, day-of-week patterns, and total active hours. Prefer resolved labels in the final user-facing answer. For each notable day, consider using get_daily_summary then get_screenshot on suggested screenshots. Use crop_screenshot to extract the active window or key content area from each, and save_screenshot to persist the best crops — cropped regions are more readable and informative than full-screen captures.
 			""";
 	}
 

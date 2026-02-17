@@ -23,6 +23,7 @@ internal static class GuideContent
 		| list_screenshots | Screenshot metadata (zero bytes) | Discovery |
 		| get_screenshot | Single screenshot (dual-audience) | Visual inspection |
 		| crop_screenshot | Region crop from screenshot | Detail extraction |
+		| save_screenshot | Save screenshot to disk (within MCP roots) | Report assets |
 
 		## Decision Tree
 
@@ -30,7 +31,7 @@ internal static class GuideContent
 		- "How was my week/month?" -> get_period_summary
 		- "What websites did I use?" -> get_website_usage
 		- "What was I doing at 3pm?" -> get_activities (narrow range) + list_screenshots
-		- "Show me screenshots" -> list_screenshots -> get_screenshot -> crop_screenshot
+		- "Show me screenshots" -> list_screenshots -> get_screenshot -> crop_screenshot -> save_screenshot
 		- "What apps do I use most?" -> get_application_usage
 
 		## Playbooks
@@ -39,7 +40,8 @@ internal static class GuideContent
 		1. get_daily_summary(date=DATE, includeHourlyWebBreakdown=true) — single call for segments, top apps, websites, and hourly web detail
 		2. If suggestedScreenshots are present, call get_screenshot for 2-3 of them
 		3. Inspect each thumbnail and use crop_screenshot to extract the active window or focused content — crops are sharper and more meaningful for reports
-		4. Present segments, top apps, total active time with cropped visuals
+		4. Use save_screenshot to persist the best crops to the project assets folder for embedding in markdown reports
+		5. Present segments, top apps, total active time with cropped visuals
 
 		### Weekly Recap
 		1. get_period_summary(startDate=MONDAY, endDate=NEXT_MONDAY)
@@ -86,5 +88,7 @@ internal static class GuideContent
 		- get_screenshot returns dual-audience: model sees thumbnail, human sees full image
 		- crop_screenshot uses percentage coordinates (0-100) by default
 		- Coordinates are resolution-independent (same region regardless of thumbnail vs full-size)
+		- save_screenshot writes to disk within MCP client roots (requires client roots capability)
+		- Full pipeline: list_screenshots -> get_screenshot -> crop_screenshot -> save_screenshot
 		""";
 }

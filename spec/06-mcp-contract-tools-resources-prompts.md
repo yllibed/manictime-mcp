@@ -112,7 +112,8 @@ Parameters:
   includeWebsites: bool (default true)
   minDurationMinutes: number (default 0, filters short segments)
   maxGapMinutes: number (default 2.0, merges same-app segments within this gap)
-  includeSummary: bool (default true, set false to omit topApplications/topWebsites)
+  includeSummary: bool (default false, set true to include topApplications/topWebsites)
+  maxSegments: int? (default 200, max 2000, controls segment truncation limit)
 
 Response: {
   startDate: string,
@@ -150,9 +151,11 @@ Implementation: query `Ar_ApplicationByDay` + `Ar_WebSiteByDay` + `Ar_DocumentBy
 
 Design note: `websites` and `notes` were removed from the segment schema because (a) website data lives in a separate timeline (`ManicTime/BrowserUrls`) and would require cross-timeline merging per segment, which is disproportionately complex for this phase, and (b) the `Ar_Activity.Notes` column is empty in all observed databases. Website data is available at the aggregate level via `topWebsites` and the dedicated `get_website_usage` tool. `includeIdleGaps`/`idleGaps` were removed because idle-gap semantics are weak without `ComputerUsage` timeline context (on/off/locked/idle); raw segment gaps are better served by `get_computer_usage`.
 
+Active/Away clipping (ADR-0007): segments are clipped to Active intervals from the `ManicTime/ComputerUsage` timeline. Activities spanning Away/Locked/Off periods are split at Active boundaries, so `totalActiveMinutes` reflects only time the computer was actively used. If no ComputerUsage timeline exists, clipping is skipped (graceful degradation). The `website` field uses tolerant matching (5s gap tolerance + carry-forward for consecutive browser segments) to improve coverage.
+
 Payload efficiency (ADR-0006): `applicationColor` was removed from segments (available in `topApplications[].color`). The nested `refs` object was flattened to a single `screenshotRef` field — `timelineRef` and `activityRef` were opaque and unused by consumers. Null fields are omitted globally via `WhenWritingNull`. Gap-based merging (`maxGapMinutes`) reduces segment count by merging nearby same-app blocks.
 
-Hard caps: max 200 segments, max 50 top applications, max 50 top websites.
+Hard caps: default 200 segments (configurable via `maxSegments`, max 2000), max 50 top applications, max 50 top websites.
 
 ### `get_period_summary`
 
@@ -318,6 +321,31 @@ Always reads the full-size image for final crop extraction. Percentage and norma
 
 Annotations: `Audience = [Role.User, Role.Assistant]` on the `ImageContentBlock` — the model receives the cropped region to analyze the detail, and the MCP client renders it for the human.
 
+### `save_screenshot`
+
+Saves a screenshot to the filesystem within an MCP client-declared root directory. This is the first write operation in the server. See ADR-0007.
+
+```
+Parameters:
+  screenshotRef: string (opaque reference from list_screenshots)
+  outputPath: string? (relative path + filename, e.g. "assets/screenshot-0930"; .jpg appended if no extension)
+  cropX: number? (optional crop left edge, percent or normalized)
+  cropY: number? (optional crop top edge)
+  cropWidth: number? (optional crop width)
+  cropHeight: number? (optional crop height)
+  coordinateUnits: string? (default "percent", also "normalized")
+
+Response: { path: string, size: number }
+```
+
+Security constraints:
+- Output path must resolve within a client-declared MCP root (`file:///` URI).
+- Path traversal blocked — the resolved absolute path must start with the root directory.
+- Only `.jpg`, `.jpeg`, and `.png` extensions allowed.
+- If no roots are declared by the client, the tool returns an error.
+
+The tool reads the full-size screenshot, applies optional crop, then writes to the first matching root. If `outputPath` is omitted, a default name is generated from the screenshot timestamp.
+
 ---
 
 ## Updated Tools
@@ -335,7 +363,7 @@ This removes a follow-up lookup in the common path.
 
 ### `get_daily_summary`
 
-Replace bare activity/usage counts with narrative output. Internally delegates to `get_activity_narrative` logic to produce structured segments and aggregates.
+Replace bare activity/usage counts with narrative output. Internally delegates to `get_activity_narrative` logic to produce structured segments and aggregates. Accepts `maxSegments` parameter (default 200, max 2000) to control segment truncation.
 
 ### `get_application_usage` / `get_document_usage`
 
@@ -412,10 +440,13 @@ Arguments:
   date: string (ISO-8601 date, required)
 
 Prompt text:
-  "Use get_activity_narrative with startDate={date} and
-   endDate={date+1} to retrieve activity data, then synthesize a concise
-   daily summary. Highlight top applications, total active time, and
-   notable patterns. Prefer resolved names/colors over internal refs."
+  "Use get_activity_narrative with startDate={date}, endDate={date+1},
+   and includeSummary=true to retrieve activity data with top-app/
+   top-website aggregates. Synthesize a concise daily summary highlighting
+   top applications, total active time, and notable patterns. Prefer
+   resolved names/colors over internal refs. If suggestedScreenshots are
+   present, use get_screenshot + crop_screenshot + save_screenshot to
+   persist the best crops to project assets."
 ```
 
 ### `weekly_review`
@@ -432,7 +463,8 @@ Prompt text:
    multi-day activity data. Synthesize a weekly overview including
    busiest/quietest days, top applications and websites, day-of-week
    patterns, and total active hours. Prefer resolved labels in the
-   final user-facing answer."
+   final user-facing answer. For notable days, use get_daily_summary +
+   get_screenshot + crop_screenshot + save_screenshot for visual context."
 ```
 
 ### `screenshot_investigation`
