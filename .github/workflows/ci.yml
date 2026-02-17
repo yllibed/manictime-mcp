@@ -129,3 +129,10 @@ jobs:
             --title "v${VERSION}" \
             --generate-notes \
             $PRERELEASE
+
+      - name: Publish to NuGet
+        run: >-
+          dotnet nuget push packages/*.nupkg
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
