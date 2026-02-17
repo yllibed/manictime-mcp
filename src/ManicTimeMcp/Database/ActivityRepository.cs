@@ -148,7 +148,7 @@ public sealed class ActivityRepository : IActivityRepository
 						 INNER JOIN Ar_Tag t ON at.TagId = t.TagId
 						 WHERE at.ActivityId = a.ActivityId) AS Tags
 					FROM Ar_Activity a
-					LEFT JOIN Ar_Group g ON a.GroupId = g.GroupId
+					LEFT JOIN Ar_Group g ON a.GroupId = g.GroupId AND a.ReportId = g.ReportId
 					LEFT JOIN Ar_CommonGroup cg ON a.CommonGroupId = cg.CommonGroupId
 					WHERE a.ReportId = @timelineId
 					  AND a.StartLocalTime < @endLocalTime
@@ -203,7 +203,7 @@ public sealed class ActivityRepository : IActivityRepository
 						a.ActivityId, a.ReportId, a.StartLocalTime, a.EndLocalTime, a.Name, a.GroupId,
 						g.Name, g.Color, g.Key
 					FROM Ar_Activity a
-					LEFT JOIN Ar_Group g ON a.GroupId = g.GroupId
+					LEFT JOIN Ar_Group g ON a.GroupId = g.GroupId AND a.ReportId = g.ReportId
 					WHERE a.ReportId = @timelineId
 					  AND a.StartLocalTime < @endLocalTime
 					  AND a.EndLocalTime > @startLocalTime

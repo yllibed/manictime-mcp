@@ -246,12 +246,13 @@ internal sealed class FixtureDatabase : IDisposable
 	{
 		Execute(connection, """
 			CREATE TABLE Ar_Group (
-				GroupId INTEGER PRIMARY KEY,
+				GroupId INTEGER NOT NULL,
 				ReportId INTEGER NOT NULL,
 				Name TEXT NOT NULL,
 				Color TEXT,
 				Key TEXT,
 				CommonId INTEGER,
+				PRIMARY KEY (GroupId, ReportId),
 				FOREIGN KEY (ReportId) REFERENCES Ar_Timeline(ReportId)
 			)
 			""");
@@ -451,7 +452,7 @@ internal sealed class FixtureDatabase : IDisposable
 	{
 		["Ar_Timeline"] = ["ReportId INTEGER PRIMARY KEY", "SchemaName TEXT NOT NULL", "BaseSchemaName TEXT NOT NULL"],
 		["Ar_Activity"] = ["ActivityId INTEGER PRIMARY KEY", "ReportId INTEGER NOT NULL", "StartLocalTime TEXT NOT NULL", "EndLocalTime TEXT NOT NULL", "Name TEXT", "GroupId INTEGER", "Notes TEXT", "IsActive INTEGER DEFAULT 1", "CommonGroupId INTEGER", "StartUtcTime TEXT", "EndUtcTime TEXT"],
-		["Ar_Group"] = ["GroupId INTEGER PRIMARY KEY", "ReportId INTEGER NOT NULL", "Name TEXT NOT NULL", "Color TEXT", "Key TEXT", "CommonId INTEGER"],
+		["Ar_Group"] = ["GroupId INTEGER NOT NULL", "ReportId INTEGER NOT NULL", "Name TEXT NOT NULL", "Color TEXT", "Key TEXT", "CommonId INTEGER"],
 		["Ar_CommonGroup"] = ["CommonGroupId INTEGER PRIMARY KEY", "Name TEXT NOT NULL", "Color TEXT", "Key TEXT"],
 		["Ar_ApplicationByDay"] = ["Day TEXT NOT NULL", "CommonGroupId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
 		["Ar_WebSiteByDay"] = ["Day TEXT NOT NULL", "CommonGroupId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
@@ -509,7 +510,7 @@ internal sealed class FixtureDatabase : IDisposable
 	{
 		var columns = new List<string>
 		{
-			"GroupId INTEGER PRIMARY KEY",
+			"GroupId INTEGER NOT NULL",
 			"ReportId INTEGER NOT NULL",
 			"Name TEXT NOT NULL",
 			"Color TEXT",
@@ -517,7 +518,8 @@ internal sealed class FixtureDatabase : IDisposable
 			"CommonId INTEGER",
 		};
 		columns.RemoveAll(c => c.StartsWith(columnToOmit, StringComparison.OrdinalIgnoreCase));
-		Execute(connection, $"CREATE TABLE Ar_Group ({string.Join(", ", columns)})");
+		var sql = $"CREATE TABLE Ar_Group ({string.Join(", ", columns)}, PRIMARY KEY (GroupId, ReportId))";
+		Execute(connection, sql);
 	}
 
 	internal static void Execute(SqliteConnection connection, string sql)

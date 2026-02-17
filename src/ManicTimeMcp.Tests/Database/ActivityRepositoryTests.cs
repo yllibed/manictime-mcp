@@ -250,6 +250,33 @@ public sealed class ActivityRepositoryTests
 		terminal.Tags.Should().BeNull();
 	}
 
+	[TestMethod]
+	public async Task GetEnrichedActivitiesAsync_Full_OverlappingGroupIds_NoDuplication()
+	{
+		using var fixture = FixtureDatabase.CreateFull(conn =>
+		{
+			FixtureSeeder.SeedOverlappingGroupIdData(conn);
+
+			// Full path also needs CommonGroup and Tag tables (seeded by CreateFull)
+			// Add minimal common groups so the JOIN has something to match
+			FixtureDatabase.Execute(conn,
+				"INSERT INTO Ar_CommonGroup (CommonGroupId, Name) VALUES (1, 'VS Code'), (2, 'Firefox')");
+		});
+		var sut = CreateRepository(fixture, fullCapabilities: true);
+
+		var results = await sut.GetEnrichedActivitiesAsync(
+			timelineId: 1,
+			startLocalTime: "2025-01-15 00:00:00",
+			endLocalTime: "2025-01-16 00:00:00").ConfigureAwait(false);
+
+		// Timeline 1 has exactly 2 activities; without ReportId scope the JOIN
+		// cross-matches GroupId=1 from timeline 2, doubling the rows.
+		results.Count.Should().Be(2);
+		results.Should().Contain(r => r.GroupName == "VS Code");
+		results.Should().Contain(r => r.GroupName == "Firefox");
+		results.Should().NotContain(r => r.GroupName == "Project Files");
+	}
+
 	#endregion
 
 	#region GetEnrichedActivitiesAsync — degraded variant
@@ -270,6 +297,25 @@ public sealed class ActivityRepositoryTests
 		devenv.GroupName.Should().Be("Visual Studio");
 		devenv.CommonGroupName.Should().BeNull();
 		devenv.Tags.Should().BeNull();
+	}
+
+	[TestMethod]
+	public async Task GetEnrichedActivitiesAsync_Degraded_OverlappingGroupIds_NoDuplication()
+	{
+		using var fixture = FixtureDatabase.CreateCoreOnly(FixtureSeeder.SeedOverlappingGroupIdData);
+		var sut = CreateRepository(fixture, fullCapabilities: false);
+
+		var results = await sut.GetEnrichedActivitiesAsync(
+			timelineId: 1,
+			startLocalTime: "2025-01-15 00:00:00",
+			endLocalTime: "2025-01-16 00:00:00").ConfigureAwait(false);
+
+		// Timeline 1 has exactly 2 activities; without ReportId scope the JOIN
+		// cross-matches GroupId=1 from timeline 2, doubling the rows.
+		results.Count.Should().Be(2);
+		results.Should().Contain(r => r.GroupName == "VS Code");
+		results.Should().Contain(r => r.GroupName == "Firefox");
+		results.Should().NotContain(r => r.GroupName == "Project Files");
 	}
 
 	[TestMethod]

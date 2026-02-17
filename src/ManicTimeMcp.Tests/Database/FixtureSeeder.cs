@@ -146,6 +146,42 @@ internal static class FixtureSeeder
 			name: "README.md", groupId: null);
 	}
 
+	/// <summary>
+	/// Seeds data where GroupId values overlap across timelines,
+	/// reproducing the real ManicTime DB scenario that causes row multiplication
+	/// when GROUP JOINs lack the ReportId scope.
+	/// </summary>
+	public static void SeedOverlappingGroupIdData(SqliteConnection connection)
+	{
+		// Two timelines that both have GroupId=1
+		InsertTimeline(connection, reportId: 1, schemaName: "ManicTime/Applications", baseSchemaName: "ManicTime/GenericGroup");
+		InsertTimeline(connection, reportId: 2, schemaName: "ManicTime/Documents", baseSchemaName: "ManicTime/GenericGroup");
+
+		// Same GroupId (1) in both timelines — this is how real ManicTime DBs work
+		InsertGroup(connection, groupId: 1, reportId: 1, name: "VS Code", color: "#007ACC", key: "code.exe");
+		InsertGroup(connection, groupId: 1, reportId: 2, name: "Project Files", color: "#FFD700", key: null);
+
+		// Different GroupId unique to each timeline
+		InsertGroup(connection, groupId: 2, reportId: 1, name: "Firefox", color: "#FF7139", key: "firefox.exe");
+		InsertGroup(connection, groupId: 2, reportId: 2, name: "Docs Folder", color: "#808080", key: null);
+
+		// Activities on timeline 1 (Applications)
+		InsertActivity(connection, activityId: 1, reportId: 1,
+			start: "2025-01-15 08:00:00", end: "2025-01-15 10:00:00",
+			name: "code.exe", groupId: 1, commonGroupId: 1);
+		InsertActivity(connection, activityId: 2, reportId: 1,
+			start: "2025-01-15 10:00:00", end: "2025-01-15 12:00:00",
+			name: "firefox.exe", groupId: 2, commonGroupId: 2);
+
+		// Activities on timeline 2 (Documents)
+		InsertActivity(connection, activityId: 3, reportId: 2,
+			start: "2025-01-15 08:00:00", end: "2025-01-15 11:00:00",
+			name: "README.md", groupId: 1);
+		InsertActivity(connection, activityId: 4, reportId: 2,
+			start: "2025-01-15 11:00:00", end: "2025-01-15 12:00:00",
+			name: "design.docx", groupId: 2);
+	}
+
 	private static void InsertTimeline(SqliteConnection connection, long reportId, string schemaName, string baseSchemaName)
 	{
 		using var command = connection.CreateCommand();
