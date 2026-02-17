@@ -29,4 +29,7 @@ public enum IssueCode
 
 	/// <summary>A supplemental table column is missing — queries may produce incomplete results.</summary>
 	SupplementalColumnMissing,
+
+	/// <summary>The detected ManicTime version differs from the version this server was tested against.</summary>
+	ManicTimeVersionUntested,
 }

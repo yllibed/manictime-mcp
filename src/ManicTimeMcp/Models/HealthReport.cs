@@ -30,6 +30,9 @@ public sealed record HealthReport
 	/// <summary>Installed ManicTime product version (e.g. "2025.3.5.0"), or null if not detected.</summary>
 	public required string? ManicTimeVersion { get; init; }
 
+	/// <summary>ManicTime version this server was validated against.</summary>
+	public string? TestedManicTimeVersion { get; init; }
+
 	/// <summary>Screenshot directory availability details.</summary>
 	public required ScreenshotAvailability Screenshots { get; init; }
 
