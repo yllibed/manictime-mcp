@@ -21,7 +21,9 @@ builder.Services
 	.WithStdioServerTransport()
 	.WithTools<TimelineTools>()
 	.WithTools<ActivityTools>()
-	.WithTools<ScreenshotTools>()
-	.WithResources<ManicTimeResources>();
+	.WithTools<NarrativeTools>()
+	.WithTools<ScreenshotToolsV2>()
+	.WithResources<ManicTimeResources>()
+	.WithPrompts<ManicTimePrompts>();
 
 await builder.Build().RunAsync().ConfigureAwait(false);

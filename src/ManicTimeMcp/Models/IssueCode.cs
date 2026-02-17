@@ -23,4 +23,10 @@ public enum IssueCode
 
 	/// <summary>The screenshots directory exists but contains no screenshot files.</summary>
 	ScreenshotDirectoryEmpty,
+
+	/// <summary>A supplemental table is missing — queries degrade to fallback paths.</summary>
+	SupplementalTableMissing,
+
+	/// <summary>A supplemental table column is missing — queries may produce incomplete results.</summary>
+	SupplementalColumnMissing,
 }

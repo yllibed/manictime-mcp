@@ -19,12 +19,20 @@ public sealed class ScreenshotService : IScreenshotService
 	private const string ScreenshotDirectoryName = "Screenshots";
 
 	private readonly IDataDirectoryResolver _resolver;
+	private readonly IScreenshotRegistry _registry;
+	private readonly IActivityTransitionProvider _transitionProvider;
 	private readonly ILogger<ScreenshotService> _logger;
 
 	/// <summary>Creates a new screenshot service.</summary>
-	public ScreenshotService(IDataDirectoryResolver resolver, ILogger<ScreenshotService> logger)
+	public ScreenshotService(
+		IDataDirectoryResolver resolver,
+		IScreenshotRegistry registry,
+		IActivityTransitionProvider transitionProvider,
+		ILogger<ScreenshotService> logger)
 	{
 		_resolver = resolver;
+		_registry = registry;
+		_transitionProvider = transitionProvider;
 		_logger = logger;
 	}
 
@@ -82,6 +90,114 @@ public sealed class ScreenshotService : IScreenshotService
 			Screenshots = matching.AsReadOnly(),
 			TotalMatching = totalMatching,
 			IsTruncated = isTruncated,
+		};
+	}
+
+	/// <inheritdoc />
+	public async Task<ScreenshotSelection> ListScreenshotsAsync(
+		ScreenshotQuery query, CancellationToken cancellationToken = default)
+	{
+		var (matching, totalMatching) = ScanAndFilter(query);
+		if (matching.Count == 0)
+		{
+			return EmptySelection();
+		}
+
+		// Apply sampling strategy
+		var (sampled, strategyUsed) = await ApplySamplingStrategyAsync(
+			matching, query, cancellationToken).ConfigureAwait(false);
+
+		// Apply limit and register
+		return BuildListResult(sampled, totalMatching, strategyUsed, query.MaxCount);
+	}
+
+	private (List<ScreenshotInfo> Matching, int TotalMatching) ScanAndFilter(ScreenshotQuery query)
+	{
+		var screenshotDir = ResolveScreenshotDirectory();
+		if (screenshotDir is null || !Directory.Exists(screenshotDir))
+		{
+			return ([], 0);
+		}
+
+		var allParsed = ScanAndParse(screenshotDir);
+		if (allParsed.Count == 0)
+		{
+			return ([], 0);
+		}
+
+		var matching = allParsed
+			.Where(s => s.LocalTimestamp >= query.StartLocalTime && s.LocalTimestamp < query.EndLocalTime)
+			.OrderBy(s => s.LocalTimestamp)
+			.ToList();
+
+		var totalMatching = matching.Count;
+		matching = PreferVariant(matching, preferThumbnail: query.PreferThumbnails);
+		return (matching, totalMatching);
+	}
+
+	private async Task<(List<ScreenshotInfo> Result, SamplingStrategy StrategyUsed)> ApplySamplingStrategyAsync(
+		List<ScreenshotInfo> matching, ScreenshotQuery query, CancellationToken cancellationToken)
+	{
+		var strategyUsed = query.SamplingStrategy;
+
+		if (query.SamplingStrategy == SamplingStrategy.ActivityTransition)
+		{
+			var transitions = await _transitionProvider.GetTransitionsAsync(
+				query.StartLocalTime, query.EndLocalTime, cancellationToken).ConfigureAwait(false);
+
+			if (transitions.Count > 0)
+			{
+				return (ActivityTransitionSampler.Sample(matching, transitions), strategyUsed);
+			}
+
+			// Fall back to interval sampling if no transitions found
+			strategyUsed = SamplingStrategy.Interval;
+		}
+
+		// Use explicit interval if provided; otherwise compute one that distributes
+		// screenshots evenly across the time range (avoids returning unsampled results).
+		var interval = query.SamplingInterval;
+		if ((interval is null || interval <= TimeSpan.Zero) && matching.Count > 0)
+		{
+			var effectiveMax = Math.Min(query.MaxCount ?? DefaultMaxScreenshots, MaxScreenshots);
+			var range = query.EndLocalTime - query.StartLocalTime;
+			if (matching.Count > effectiveMax && range.TotalSeconds > 0)
+			{
+				interval = TimeSpan.FromSeconds(range.TotalSeconds / effectiveMax);
+			}
+		}
+
+		if (interval is { } iv && iv > TimeSpan.Zero)
+		{
+			matching = ApplySampling(matching, iv);
+		}
+
+		return (matching, strategyUsed);
+	}
+
+	private ScreenshotSelection BuildListResult(
+		List<ScreenshotInfo> matching, int totalMatching, SamplingStrategy strategyUsed, int? maxCount)
+	{
+		var effectiveLimit = Math.Min(maxCount ?? DefaultMaxScreenshots, MaxScreenshots);
+		var isTruncated = matching.Count > effectiveLimit;
+		if (isTruncated)
+		{
+			matching = matching.Take(effectiveLimit).ToList();
+		}
+
+		foreach (var screenshot in matching)
+		{
+			screenshot.Ref = _registry.Register(screenshot);
+		}
+
+		_logger.ScreenshotsSelected(matching.Count, totalMatching);
+
+		return new ScreenshotSelection
+		{
+			Screenshots = matching.AsReadOnly(),
+			TotalMatching = totalMatching,
+			IsTruncated = isTruncated,
+			SamplingStrategyUsed = strategyUsed,
 		};
 	}
 

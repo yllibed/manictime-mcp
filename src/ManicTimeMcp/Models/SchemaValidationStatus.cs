@@ -11,4 +11,7 @@ public enum SchemaValidationStatus
 
 	/// <summary>Schema validation was not performed (database missing or deferred to WS-04).</summary>
 	NotChecked,
+
+	/// <summary>Core schema valid but supplemental/informational tables are missing.</summary>
+	ValidWithWarnings,
 }

@@ -17,4 +17,7 @@ public sealed record ScreenshotQuery
 
 	/// <summary>Whether to prefer thumbnails over full-size images.</summary>
 	public bool PreferThumbnails { get; init; } = true;
+
+	/// <summary>Sampling strategy to use. Defaults to <see cref="SamplingStrategy.Interval"/>.</summary>
+	public SamplingStrategy SamplingStrategy { get; init; } = SamplingStrategy.Interval;
 }

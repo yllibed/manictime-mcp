@@ -16,4 +16,13 @@ internal static partial class Log
 
 	[LoggerMessage(EventId = 3004, Level = LogLevel.Warning, Message = "Failed to read screenshot file: {FilePath}")]
 	internal static partial void ScreenshotReadFailed(this ILogger logger, string filePath, Exception exception);
+
+	[LoggerMessage(EventId = 3005, Level = LogLevel.Warning, Message = "Failed to decode JPEG for crop operation")]
+	internal static partial void CropDecodeFailed(this ILogger logger, Exception? exception);
+
+	[LoggerMessage(EventId = 3006, Level = LogLevel.Warning, Message = "Crop region resolved to empty area: x={X}, y={Y}, w={Width}, h={Height}")]
+	internal static partial void CropEmptyRegion(this ILogger logger, double x, double y, double width, double height);
+
+	[LoggerMessage(EventId = 3007, Level = LogLevel.Warning, Message = "Failed to extract bitmap subset for crop")]
+	internal static partial void CropExtractFailed(this ILogger logger);
 }

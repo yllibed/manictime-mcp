@@ -20,6 +20,7 @@ public sealed class HealthService : IHealthService
 	private readonly IDataDirectoryResolver _resolver;
 	private readonly IPlatformEnvironment _platform;
 	private readonly ISchemaValidator _schemaValidator;
+	private readonly QueryCapabilityMatrix _capabilities;
 	private readonly ILogger<HealthService> _logger;
 
 	/// <summary>Creates a new health service with injected dependencies.</summary>
@@ -27,11 +28,13 @@ public sealed class HealthService : IHealthService
 		IDataDirectoryResolver resolver,
 		IPlatformEnvironment platform,
 		ISchemaValidator schemaValidator,
+		QueryCapabilityMatrix capabilities,
 		ILogger<HealthService> logger)
 	{
 		_resolver = resolver;
 		_platform = platform;
 		_schemaValidator = schemaValidator;
+		_capabilities = capabilities;
 		_logger = logger;
 	}
 
@@ -52,6 +55,8 @@ public sealed class HealthService : IHealthService
 
 		_logger.HealthCheckCompleted(status, issues.Count);
 
+		var degraded = _capabilities.GetDegradedCapabilities();
+
 		return new HealthReport
 		{
 			Status = status,
@@ -64,6 +69,7 @@ public sealed class HealthService : IHealthService
 			ManicTimeProcessId = processId,
 			ManicTimeVersion = version,
 			Screenshots = screenshots,
+			DegradedCapabilities = degraded.Count > 0 ? degraded : null,
 			Issues = issues.AsReadOnly(),
 		};
 	}
@@ -119,6 +125,15 @@ public sealed class HealthService : IHealthService
 		var dbPath = Path.Combine(dataDirectory, DatabaseFileName);
 		var result = _schemaValidator.Validate(dbPath);
 		issues.AddRange(result.Issues);
+
+		// Populate the DI singleton with validated capabilities so repositories
+		// switch from degraded fallback to optimized query paths.
+		if (result.Capabilities is { } caps)
+		{
+			_capabilities.Populate(
+				caps.TablePresence.Where(kv => kv.Value).Select(kv => kv.Key));
+		}
+
 		return result.Status;
 	}
 

@@ -250,6 +250,39 @@ public sealed class ScreenshotServiceTests : IDisposable
 
 	#endregion
 
+	#region ListScreenshotsAsync — interval sampling
+
+	[TestMethod]
+	public async Task ListScreenshotsAsync_IntervalStrategy_ComputesDefaultInterval()
+	{
+		// Create 30 screenshots at 1-minute intervals
+		for (var i = 0; i < 30; i++)
+		{
+			CreateScreenshotFile($"2025-01-15_08-{i:D2}-00_0001_M0.jpg");
+		}
+
+		var resolver = new StubResolver(_tempDir);
+		var sut = CreateService(resolver);
+
+		var query = new ScreenshotQuery
+		{
+			StartLocalTime = new DateTime(2025, 1, 15, 0, 0, 0),
+			EndLocalTime = new DateTime(2025, 1, 16, 0, 0, 0),
+			MaxCount = 10,
+			PreferThumbnails = true,
+			SamplingStrategy = SamplingStrategy.Interval,
+		};
+
+		var result = await sut.ListScreenshotsAsync(query).ConfigureAwait(false);
+
+		// With 30 screenshots and maxCount=10, interval sampling should space them out.
+		// Exact count depends on computed interval, but should be significantly less than 30.
+		result.Screenshots.Count.Should().BeLessThanOrEqualTo(10);
+		result.SamplingStrategyUsed.Should().Be(SamplingStrategy.Interval);
+	}
+
+	#endregion
+
 	#region Helpers
 
 	private string CreateScreenshotFile(string fileName)
@@ -266,7 +299,7 @@ public sealed class ScreenshotServiceTests : IDisposable
 	};
 
 	private static ScreenshotService CreateService(StubResolver resolver) =>
-		new(resolver, NullLogger<ScreenshotService>.Instance);
+		new(resolver, new ScreenshotRegistry(), new StubActivityTransitionProvider(), NullLogger<ScreenshotService>.Instance);
 
 	private sealed class StubResolver(string? path) : IDataDirectoryResolver
 	{

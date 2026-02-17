@@ -15,12 +15,20 @@ public sealed class ActivityTools
 {
 	private readonly IActivityRepository _activityRepository;
 	private readonly ITimelineRepository _timelineRepository;
+	private readonly IUsageRepository _usageRepository;
+	private readonly QueryCapabilityMatrix _capabilities;
 
 	/// <summary>Creates activity tools with injected repositories.</summary>
-	public ActivityTools(IActivityRepository activityRepository, ITimelineRepository timelineRepository)
+	public ActivityTools(
+		IActivityRepository activityRepository,
+		ITimelineRepository timelineRepository,
+		IUsageRepository usageRepository,
+		QueryCapabilityMatrix capabilities)
 	{
 		_activityRepository = activityRepository;
 		_timelineRepository = timelineRepository;
+		_usageRepository = usageRepository;
+		_capabilities = capabilities;
 	}
 
 	/// <summary>Returns activities for a specific timeline within a date range.</summary>
@@ -30,11 +38,20 @@ public sealed class ActivityTools
 		[Description("Start date (ISO-8601, e.g. 2025-01-15)")] string startDate,
 		[Description("End date (ISO-8601, e.g. 2025-01-16)")] string endDate,
 		[Description("Maximum number of results (default 1000, max 5000)")] int? limit = null,
+		[Description("Include group details: name, color, key, commonGroupName (default true)")] bool includeGroupDetails = true,
 		CancellationToken cancellationToken = default)
 	{
 		try
 		{
 			var (startLocal, endLocal) = ParseDateRange(startDate, endDate);
+			var effectiveLimit = QueryLimits.Clamp(limit, QueryLimits.DefaultActivities, QueryLimits.MaxActivities);
+
+			if (includeGroupDetails)
+			{
+				return await GetEnrichedActivitiesResultAsync(
+					timelineId, startDate, endDate, startLocal, endLocal,
+					effectiveLimit, cancellationToken).ConfigureAwait(false);
+			}
 
 			var activities = await _activityRepository.GetActivitiesAsync(
 				timelineId, startLocal, endLocal, limit, cancellationToken).ConfigureAwait(false);
@@ -45,8 +62,14 @@ public sealed class ActivityTools
 				startDate,
 				endDate,
 				count = activities.Count,
-				isTruncated = activities.Count >= QueryLimits.Clamp(limit, QueryLimits.DefaultActivities, QueryLimits.MaxActivities),
 				activities,
+				truncation = new TruncationInfo
+				{
+					Truncated = activities.Count >= effectiveLimit,
+					ReturnedCount = activities.Count,
+					TotalAvailable = null as int?,
+				},
+				diagnostics = DiagnosticsInfo.Ok,
 			}, JsonOptions.Default));
 		}
 		catch (FormatException ex)
@@ -85,63 +108,43 @@ public sealed class ActivityTools
 		return await GetActivitiesBySchemaAsync("ManicTime/Tags", startDate, endDate, limit, cancellationToken).ConfigureAwait(false);
 	}
 
-	/// <summary>Returns application usage activities for a date range.</summary>
-	[McpServerTool(Name = "get_application_usage", ReadOnly = true), Description("Get application usage activities for a date range, showing which applications were used and when.")]
+	/// <summary>Returns application usage from pre-aggregated tables (or fallback).</summary>
+	[McpServerTool(Name = "get_application_usage", ReadOnly = true), Description("Get application usage for a date range, showing daily totals per application with resolved names and colors.")]
 	public async Task<CallToolResult> GetApplicationUsageAsync(
 		[Description("Start date (ISO-8601, e.g. 2025-01-15)")] string startDate,
 		[Description("End date (ISO-8601, e.g. 2025-01-16)")] string endDate,
-		[Description("Maximum number of results")] int? limit = null,
-		CancellationToken cancellationToken = default)
-	{
-		return await GetActivitiesBySchemaAsync("ManicTime/Applications", startDate, endDate, limit, cancellationToken).ConfigureAwait(false);
-	}
-
-	/// <summary>Returns document usage activities for a date range.</summary>
-	[McpServerTool(Name = "get_document_usage", ReadOnly = true), Description("Get document/file usage activities for a date range.")]
-	public async Task<CallToolResult> GetDocumentUsageAsync(
-		[Description("Start date (ISO-8601, e.g. 2025-01-15)")] string startDate,
-		[Description("End date (ISO-8601, e.g. 2025-01-16)")] string endDate,
-		[Description("Maximum number of results")] int? limit = null,
-		CancellationToken cancellationToken = default)
-	{
-		return await GetActivitiesBySchemaAsync("ManicTime/Documents", startDate, endDate, limit, cancellationToken).ConfigureAwait(false);
-	}
-
-	/// <summary>Returns a daily summary aggregating activity across timelines.</summary>
-	[McpServerTool(Name = "get_daily_summary", ReadOnly = true), Description("Get a summary of activity for a specific date, including activity counts per timeline.")]
-	public async Task<CallToolResult> GetDailySummaryAsync(
-		[Description("Date to summarize (ISO-8601, e.g. 2025-01-15)")] string date,
+		[Description("Maximum number of results (default 1000, max 2000)")] int? limit = null,
 		CancellationToken cancellationToken = default)
 	{
 		try
 		{
-			var parsedDate = DateTime.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
-			var startLocal = parsedDate.ToString("yyyy-MM-dd 00:00:00", CultureInfo.InvariantCulture);
-			var endLocal = parsedDate.AddDays(1).ToString("yyyy-MM-dd 00:00:00", CultureInfo.InvariantCulture);
+			var (startDay, endDay) = ParseDayRange(startDate, endDate);
+			var effectiveLimit = QueryLimits.Clamp(limit, QueryLimits.DefaultUsageLimit, QueryLimits.MaxDailyUsageRows);
+			var usage = await _usageRepository.GetDailyAppUsageAsync(
+				startDay, endDay, effectiveLimit, cancellationToken).ConfigureAwait(false);
 
-			var timelines = await _timelineRepository.GetTimelinesAsync(cancellationToken).ConfigureAwait(false);
-
-			var summary = new DailySummary { Date = date };
-
-			foreach (var timeline in timelines)
+			var degraded = !_capabilities.HasPreAggregatedAppUsage;
+			return ToolResults.Success(JsonSerializer.Serialize(new
 			{
-				var activities = await _activityRepository.GetActivitiesAsync(
-					timeline.ReportId, startLocal, endLocal, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-				if (activities.Count == 0)
+				startDate,
+				endDate,
+				count = usage.Count,
+				usage,
+				truncation = new TruncationInfo
 				{
-					continue;
-				}
-
-				summary.TimelineSummaries.Add(new TimelineSummaryEntry
-				{
-					TimelineId = timeline.ReportId,
-					SchemaName = timeline.SchemaName,
-					ActivityCount = activities.Count,
-				});
-			}
-
-			return ToolResults.Success(JsonSerializer.Serialize(summary, JsonOptions.Default));
+					Truncated = usage.Count >= effectiveLimit,
+					ReturnedCount = usage.Count,
+					TotalAvailable = null as int?,
+				},
+				diagnostics = degraded
+					? new DiagnosticsInfo
+					{
+						Degraded = true,
+						ReasonCode = "FallbackComputation",
+						RemediationHint = "Pre-aggregated tables not found. Results computed from raw activities. Ensure ManicTime has generated aggregation tables.",
+					}
+					: DiagnosticsInfo.Ok,
+			}, JsonOptions.Default));
 		}
 		catch (FormatException ex)
 		{
@@ -157,7 +160,94 @@ public sealed class ActivityTools
 		}
 	}
 
-	private async Task<CallToolResult> GetActivitiesBySchemaAsync(string schemaName, string startDate, string endDate, int? limit, CancellationToken cancellationToken)
+	/// <summary>Returns document usage from pre-aggregated tables (or fallback).</summary>
+	[McpServerTool(Name = "get_document_usage", ReadOnly = true), Description("Get document/file usage for a date range, showing daily totals per document with resolved names.")]
+	public async Task<CallToolResult> GetDocumentUsageAsync(
+		[Description("Start date (ISO-8601, e.g. 2025-01-15)")] string startDate,
+		[Description("End date (ISO-8601, e.g. 2025-01-16)")] string endDate,
+		[Description("Maximum number of results (default 1000, max 2000)")] int? limit = null,
+		CancellationToken cancellationToken = default)
+	{
+		try
+		{
+			var (startDay, endDay) = ParseDayRange(startDate, endDate);
+			var effectiveLimit = QueryLimits.Clamp(limit, QueryLimits.DefaultUsageLimit, QueryLimits.MaxDailyUsageRows);
+			var usage = await _usageRepository.GetDailyDocUsageAsync(
+				startDay, endDay, effectiveLimit, cancellationToken).ConfigureAwait(false);
+
+			var degraded = !_capabilities.HasPreAggregatedDocUsage;
+			return ToolResults.Success(JsonSerializer.Serialize(new
+			{
+				startDate,
+				endDate,
+				count = usage.Count,
+				usage,
+				truncation = new TruncationInfo
+				{
+					Truncated = usage.Count >= effectiveLimit,
+					ReturnedCount = usage.Count,
+					TotalAvailable = null as int?,
+				},
+				diagnostics = degraded
+					? new DiagnosticsInfo
+					{
+						Degraded = true,
+						ReasonCode = "FallbackComputation",
+						RemediationHint = "Pre-aggregated tables not found. Results computed from raw activities. Ensure ManicTime has generated aggregation tables.",
+					}
+					: DiagnosticsInfo.Ok,
+			}, JsonOptions.Default));
+		}
+		catch (FormatException ex)
+		{
+			return ToolResults.Error($"Invalid date format. Expected ISO-8601 (yyyy-MM-dd). {ex.Message}");
+		}
+		catch (SqliteException ex)
+		{
+			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://health resource to diagnose the issue.");
+		}
+		catch (InvalidOperationException ex)
+		{
+			return ToolResults.Error($"Database is busy after retries: {ex.Message}. ManicTime may be performing a long write operation.");
+		}
+	}
+
+	private async Task<CallToolResult> GetEnrichedActivitiesResultAsync(
+		long timelineId, string startDate, string endDate,
+		string startLocal, string endLocal, int effectiveLimit,
+		CancellationToken cancellationToken)
+	{
+		var activities = await _activityRepository.GetEnrichedActivitiesAsync(
+			timelineId, startLocal, endLocal, effectiveLimit, cancellationToken).ConfigureAwait(false);
+
+		var degraded = !_capabilities.HasCommonGroup;
+		return ToolResults.Success(JsonSerializer.Serialize(new
+		{
+			timelineId,
+			startDate,
+			endDate,
+			count = activities.Count,
+			activities,
+			truncation = new TruncationInfo
+			{
+				Truncated = activities.Count >= effectiveLimit,
+				ReturnedCount = activities.Count,
+				TotalAvailable = null as int?,
+			},
+			diagnostics = degraded
+				? new DiagnosticsInfo
+				{
+					Degraded = true,
+					ReasonCode = "NoCommonGroup",
+					RemediationHint = "CommonGroup table not found. Group details may be incomplete.",
+				}
+				: DiagnosticsInfo.Ok,
+		}, JsonOptions.Default));
+	}
+
+	private async Task<CallToolResult> GetActivitiesBySchemaAsync(
+		string schemaName, string startDate, string endDate, int? limit,
+		CancellationToken cancellationToken)
 	{
 		try
 		{
@@ -191,8 +281,14 @@ public sealed class ActivityTools
 				startDate,
 				endDate,
 				count = sorted.Count,
-				isTruncated,
 				activities = sorted,
+				truncation = new TruncationInfo
+				{
+					Truncated = isTruncated,
+					ReturnedCount = sorted.Count,
+					TotalAvailable = allActivities.Count,
+				},
+				diagnostics = DiagnosticsInfo.Ok,
 			}, JsonOptions.Default));
 		}
 		catch (FormatException ex)
@@ -217,6 +313,14 @@ public sealed class ActivityTools
 		return (
 			start.ToString("yyyy-MM-dd 00:00:00", CultureInfo.InvariantCulture),
 			end.ToString("yyyy-MM-dd 00:00:00", CultureInfo.InvariantCulture));
+	}
+
+	private static (string StartDay, string EndDay) ParseDayRange(string startDate, string endDate)
+	{
+		// Validate date format
+		_ = DateTime.ParseExact(startDate, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+		_ = DateTime.ParseExact(endDate, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+		return (startDate, endDate);
 	}
 }
 #pragma warning restore IL2026

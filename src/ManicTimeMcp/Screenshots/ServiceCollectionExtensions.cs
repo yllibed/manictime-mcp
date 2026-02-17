@@ -9,6 +9,9 @@ public static class ServiceCollectionExtensions
 	public static IServiceCollection AddManicTimeScreenshots(this IServiceCollection services)
 	{
 		services.AddSingleton<IScreenshotService, ScreenshotService>();
+		services.AddSingleton<IScreenshotRegistry, ScreenshotRegistry>();
+		services.AddSingleton<IActivityTransitionProvider, DatabaseActivityTransitionProvider>();
+		services.AddSingleton<ICropService, CropService>();
 		return services;
 	}
 }

@@ -4,6 +4,7 @@ using ManicTimeMcp.Configuration;
 using ManicTimeMcp.Database;
 using ManicTimeMcp.Database.Dto;
 using ManicTimeMcp.Mcp;
+using ManicTimeMcp.Screenshots;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Protocol;
 
@@ -17,6 +18,16 @@ public sealed class ResourceTests
 		new() { ReportId = 1, SchemaName = "ManicTime/Applications", BaseSchemaName = "ManicTime/Applications" },
 	];
 
+	private static readonly EnvironmentDto[] SampleEnvironments =
+	[
+		new() { EnvironmentId = 1, DeviceName = "TEST-PC" },
+	];
+
+	private static readonly TimelineSummaryDto[] SampleSummaries =
+	[
+		new() { ReportId = 1, StartLocalTime = "2025-01-01 00:00:00", EndLocalTime = "2025-01-31 23:59:59" },
+	];
+
 	private static McpTestHarness CreateHarness()
 	{
 		return new McpTestHarness((services, builder) =>
@@ -24,6 +35,10 @@ public sealed class ResourceTests
 			services.AddSingleton<IDataDirectoryResolver>(new StubDataDirectoryResolver(@"C:\TestData"));
 			services.AddSingleton<IHealthService>(new StubHealthService());
 			services.AddSingleton<ITimelineRepository>(new StubTimelineRepository(SampleTimelines));
+			services.AddSingleton<IEnvironmentRepository>(new StubEnvironmentRepository(SampleEnvironments));
+			services.AddSingleton<IUsageRepository>(new StubUsageRepository(summaries: SampleSummaries));
+			services.AddSingleton<IScreenshotRegistry, ScreenshotRegistry>();
+			services.AddSingleton<IScreenshotService>(new StubScreenshotService());
 			builder.WithResources<ManicTimeResources>();
 		});
 	}
@@ -39,6 +54,9 @@ public sealed class ResourceTests
 		uris.Should().Contain("manictime://config");
 		uris.Should().Contain("manictime://timelines");
 		uris.Should().Contain("manictime://health");
+		uris.Should().Contain("manictime://guide");
+		uris.Should().Contain("manictime://environment");
+		uris.Should().Contain("manictime://data-range");
 	}
 
 	[TestMethod]
@@ -80,5 +98,58 @@ public sealed class ResourceTests
 		var content = result.Contents.OfType<TextResourceContents>().Single();
 		var doc = JsonDocument.Parse(content.Text);
 		doc.RootElement.GetProperty("status").GetInt32().Should().Be(0); // HealthStatus.Healthy = 0
+	}
+
+	[TestMethod]
+	public async Task ReadGuide_ReturnsGuideText()
+	{
+		await using var harness = CreateHarness();
+		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
+		var result = await client.ReadResourceAsync(
+			"manictime://guide").ConfigureAwait(false);
+
+		var content = result.Contents.OfType<TextResourceContents>().Single();
+		content.Text.Should().Contain("ManicTime MCP Usage Guide");
+		content.Text.Should().Contain("get_activity_narrative");
+	}
+
+	[TestMethod]
+	public async Task ReadEnvironment_ReturnsEnvironmentData()
+	{
+		await using var harness = CreateHarness();
+		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
+		var result = await client.ReadResourceAsync(
+			"manictime://environment").ConfigureAwait(false);
+
+		var content = result.Contents.OfType<TextResourceContents>().Single();
+		var doc = JsonDocument.Parse(content.Text);
+		doc.RootElement.GetProperty("environments").GetArrayLength().Should().Be(1);
+		doc.RootElement.GetProperty("environments")[0].GetProperty("deviceName").GetString().Should().Be("TEST-PC");
+	}
+
+	[TestMethod]
+	public async Task ReadDataRange_ReturnsTimelineSummaries()
+	{
+		await using var harness = CreateHarness();
+		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
+		var result = await client.ReadResourceAsync(
+			"manictime://data-range").ConfigureAwait(false);
+
+		var content = result.Contents.OfType<TextResourceContents>().Single();
+		var doc = JsonDocument.Parse(content.Text);
+		doc.RootElement.GetProperty("timelineSummaries").GetArrayLength().Should().Be(1);
+	}
+
+	[TestMethod]
+	public async Task ReadScreenshot_UnknownRef_ReturnsErrorText()
+	{
+		await using var harness = CreateHarness();
+		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
+		var result = await client.ReadResourceAsync(
+			"manictime://screenshot/unknown-ref").ConfigureAwait(false);
+
+		var content = result.Contents.OfType<TextResourceContents>().Single();
+		var doc = JsonDocument.Parse(content.Text);
+		doc.RootElement.GetProperty("error").GetString().Should().Contain("Unknown");
 	}
 }

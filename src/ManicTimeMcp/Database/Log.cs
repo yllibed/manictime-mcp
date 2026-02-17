@@ -23,4 +23,13 @@ internal static partial class Log
 
 	[LoggerMessage(EventId = 2006, Level = LogLevel.Debug, Message = "Query executed: {QueryName} returned {RowCount} rows")]
 	internal static partial void QueryExecuted(this ILogger logger, string queryName, int rowCount);
+
+	[LoggerMessage(EventId = 2007, Level = LogLevel.Warning, Message = "Supplemental table '{TableName}' is missing — related queries will use fallback paths")]
+	internal static partial void SupplementalTableMissing(this ILogger logger, string tableName);
+
+	[LoggerMessage(EventId = 2008, Level = LogLevel.Warning, Message = "Supplemental column '{ColumnName}' is missing from table '{TableName}'")]
+	internal static partial void SupplementalColumnMissing(this ILogger logger, string tableName, string columnName);
+
+	[LoggerMessage(EventId = 2009, Level = LogLevel.Warning, Message = "Schema validation failed during startup; capabilities fully degraded")]
+	internal static partial void StartupValidationFailed(this ILogger logger, Exception exception);
 }

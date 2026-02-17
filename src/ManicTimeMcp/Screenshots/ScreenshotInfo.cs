@@ -30,6 +30,12 @@ public sealed record ScreenshotInfo
 	/// <summary>Full file path.</summary>
 	public required string FilePath { get; init; }
 
+	/// <summary>
+	/// Opaque reference string assigned after registration with <see cref="IScreenshotRegistry"/>.
+	/// Null until the screenshot is registered.
+	/// </summary>
+	public string? Ref { get; set; }
+
 	/// <summary>Combined local timestamp derived from date and time components.</summary>
 	public DateTime LocalTimestamp => Date.ToDateTime(Time);
 }

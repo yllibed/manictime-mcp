@@ -1,0 +1,292 @@
+using System.ComponentModel;
+using System.Globalization;
+using System.Text.Json;
+using ManicTimeMcp.Screenshots;
+using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
+
+namespace ManicTimeMcp.Mcp;
+
+/// <summary>Progressive-resolution MCP tools for screenshots.</summary>
+[McpServerToolType]
+#pragma warning disable IL2026 // Trimming is disabled (PublishTrimmed=false); reflection-based JSON is safe
+public sealed class ScreenshotToolsV2
+{
+	private readonly IScreenshotService _screenshotService;
+	private readonly IScreenshotRegistry _registry;
+	private readonly ICropService _cropService;
+
+	/// <summary>Creates screenshot tools with injected services.</summary>
+	public ScreenshotToolsV2(
+		IScreenshotService screenshotService,
+		IScreenshotRegistry registry,
+		ICropService cropService)
+	{
+		_screenshotService = screenshotService;
+		_registry = registry;
+		_cropService = cropService;
+	}
+
+	/// <summary>Lists screenshots with metadata only (zero image bytes).</summary>
+	[McpServerTool(Name = "list_screenshots", ReadOnly = true), Description("List screenshots for a date range. Returns metadata and resource links (no image bytes). Use get_screenshot to retrieve images.")]
+	public async Task<CallToolResult> ListScreenshotsAsync(
+		[Description("Start date (ISO-8601, inclusive)")] string startDate,
+		[Description("End date (ISO-8601, exclusive)")] string endDate,
+		[Description("Maximum screenshots (default 20, max 100)")] int? maxCount = null,
+		[Description("Sampling strategy: 'activity_transition' (default) or 'interval'")] string? samplingStrategy = null,
+		CancellationToken cancellationToken = default)
+	{
+		try
+		{
+			var (start, end) = ParseDates(startDate, endDate);
+			var strategy = ParseSamplingStrategy(samplingStrategy);
+
+			var query = new ScreenshotQuery
+			{
+				StartLocalTime = start,
+				EndLocalTime = end,
+				MaxCount = maxCount,
+				PreferThumbnails = true,
+				SamplingStrategy = strategy,
+			};
+
+			var selection = await _screenshotService.ListScreenshotsAsync(query, cancellationToken)
+				.ConfigureAwait(false);
+
+			return BuildListResult(selection);
+		}
+		catch (FormatException ex)
+		{
+			return ToolResults.Error($"Invalid date format. Expected ISO-8601 (yyyy-MM-dd). {ex.Message}");
+		}
+	}
+
+	/// <summary>Retrieves a single screenshot with dual-audience delivery.</summary>
+	[McpServerTool(Name = "get_screenshot", ReadOnly = true), Description("Get a screenshot by reference. Returns a thumbnail for model reasoning and full image for human viewing.")]
+	public CallToolResult GetScreenshot(
+		[Description("Screenshot reference from list_screenshots")] string screenshotRef)
+	{
+		var info = _registry.TryResolve(screenshotRef);
+		if (info is null)
+		{
+			return ToolResults.Error("Unknown screenshotRef. Use list_screenshots to discover valid references.");
+		}
+
+		try
+		{
+			return BuildGetResult(info);
+		}
+		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+		{
+			return ToolResults.Error($"Screenshot file error: {ex.Message}. Try reading the manictime://health resource to diagnose the issue.");
+		}
+	}
+
+	/// <summary>Crops a region from a screenshot.</summary>
+	[McpServerTool(Name = "crop_screenshot", ReadOnly = true), Description("Crop a region from a screenshot using percentage or normalized coordinates. Designed for model-driven ROI selection after inspecting a thumbnail.")]
+	public CallToolResult CropScreenshot(
+		[Description("Screenshot reference from list_screenshots")] string screenshotRef,
+		[Description("Left edge (percent 0-100 or normalized 0.0-1.0)")] double x,
+		[Description("Top edge (percent 0-100 or normalized 0.0-1.0)")] double y,
+		[Description("Width (percent 0-100 or normalized 0.0-1.0)")] double width,
+		[Description("Height (percent 0-100 or normalized 0.0-1.0)")] double height,
+		[Description("Coordinate units: 'percent' (default) or 'normalized'")] string? coordinateUnits = null)
+	{
+		var info = _registry.TryResolve(screenshotRef);
+		if (info is null)
+		{
+			return ToolResults.Error("Unknown screenshotRef. Use list_screenshots to discover valid references.");
+		}
+
+		try
+		{
+			return BuildCropResult(info, x, y, width, height, coordinateUnits);
+		}
+		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+		{
+			return ToolResults.Error($"Screenshot file error: {ex.Message}. Try reading the manictime://health resource to diagnose the issue.");
+		}
+	}
+
+	private static CallToolResult BuildListResult(ScreenshotSelection selection)
+	{
+		var content = new List<ContentBlock>();
+
+		var metadata = new
+		{
+			screenshots = selection.Screenshots.Select(s => new
+			{
+				screenshotRef = s.Ref,
+				timestamp = s.LocalTimestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+				displayLocalTime = s.LocalTimestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+				s.Width,
+				s.Height,
+				s.Monitor,
+				hasThumbnail = s.IsThumbnail || HasThumbnailVariant(s),
+				resourceUri = $"manictime://screenshot/{s.Ref}",
+			}),
+			sampling = selection.SamplingStrategyUsed.ToString().ToLowerInvariant(),
+			truncation = new TruncationInfo
+			{
+				Truncated = selection.IsTruncated,
+				ReturnedCount = selection.Screenshots.Count,
+				TotalAvailable = selection.TotalMatching,
+			},
+			diagnostics = DiagnosticsInfo.Ok,
+		};
+
+		content.Add(new TextContentBlock
+		{
+			Text = JsonSerializer.Serialize(metadata, JsonOptions.Default),
+		});
+
+		foreach (var screenshot in selection.Screenshots)
+		{
+			content.Add(new ResourceLinkBlock
+			{
+				Uri = $"manictime://screenshot/{screenshot.Ref}",
+				Name = $"Screenshot {screenshot.LocalTimestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}",
+				MimeType = "image/jpeg",
+			});
+		}
+
+		return new CallToolResult { Content = content };
+	}
+
+	private CallToolResult BuildGetResult(ScreenshotInfo info)
+	{
+		var content = new List<ContentBlock>();
+		var thumbnailPath = info.IsThumbnail ? info.FilePath : GetThumbnailPath(info.FilePath);
+		var fullPath = info.IsThumbnail ? GetFullSizePath(info.FilePath) : info.FilePath;
+		var bothAudience = new Annotations { Audience = [Role.User, Role.Assistant] };
+		var userOnly = new Annotations { Audience = [Role.User] };
+
+		// Read thumbnail for model reasoning
+		var thumbnailBytes = thumbnailPath is not null ? _screenshotService.ReadScreenshot(thumbnailPath) : null;
+		var fullBytes = fullPath is not null ? _screenshotService.ReadScreenshot(fullPath) : null;
+
+		if (thumbnailBytes is not null && fullBytes is not null)
+		{
+			// Dual-audience: thumbnail for model + full for human
+			content.Add(new ImageContentBlock
+			{
+				Data = Convert.ToBase64String(thumbnailBytes),
+				MimeType = "image/jpeg",
+				Annotations = bothAudience,
+			});
+			content.Add(new ImageContentBlock
+			{
+				Data = Convert.ToBase64String(fullBytes),
+				MimeType = "image/jpeg",
+				Annotations = userOnly,
+			});
+		}
+		else
+		{
+			// Single image available — both audiences see it
+			var bytes = thumbnailBytes ?? fullBytes;
+			if (bytes is not null)
+			{
+				content.Add(new ImageContentBlock
+				{
+					Data = Convert.ToBase64String(bytes),
+					MimeType = "image/jpeg",
+					Annotations = bothAudience,
+				});
+			}
+		}
+
+		content.Add(new TextContentBlock
+		{
+			Text = JsonSerializer.Serialize(new
+			{
+				screenshotRef = info.Ref,
+				timestamp = info.LocalTimestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+				info.Width,
+				info.Height,
+				info.Monitor,
+				isThumbnail = info.IsThumbnail,
+			}, JsonOptions.Default),
+		});
+
+		return new CallToolResult { Content = content };
+	}
+
+	private CallToolResult BuildCropResult(
+		ScreenshotInfo info, double x, double y, double w, double h, string? coordinateUnits)
+	{
+		var units = ParseCoordinateUnits(coordinateUnits);
+
+		// Always read full-size for crop extraction
+		var fullPath = info.IsThumbnail ? GetFullSizePath(info.FilePath) : info.FilePath;
+		var bytes = fullPath is not null ? _screenshotService.ReadScreenshot(fullPath) : null;
+		bytes ??= _screenshotService.ReadScreenshot(info.FilePath);
+
+		if (bytes is null)
+		{
+			return ToolResults.Error("Screenshot file not found or inaccessible.");
+		}
+
+		var region = new CropRegion { X = x, Y = y, Width = w, Height = h, Units = units };
+		var cropped = _cropService.Crop(bytes, region);
+		if (cropped is null)
+		{
+			return ToolResults.Error("Crop failed. The image may be corrupted or the region is invalid.");
+		}
+
+		var content = new List<ContentBlock>
+		{
+			new ImageContentBlock
+			{
+				Data = Convert.ToBase64String(cropped),
+				MimeType = "image/jpeg",
+				Annotations = new Annotations { Audience = [Role.User, Role.Assistant] },
+			},
+			new TextContentBlock
+			{
+				Text = JsonSerializer.Serialize(new
+				{
+					screenshotRef = info.Ref,
+					crop = new { x, y, width = w, height = h, units = units.ToString().ToLowerInvariant() },
+				}, JsonOptions.Default),
+			},
+		};
+
+		return new CallToolResult { Content = content };
+	}
+
+	private static (DateTime Start, DateTime End) ParseDates(string startDate, string endDate)
+	{
+		var start = DateTime.ParseExact(startDate, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+		var end = DateTime.ParseExact(endDate, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+		return (start, end);
+	}
+
+	private static SamplingStrategy ParseSamplingStrategy(string? value) =>
+		value?.ToUpperInvariant() switch
+		{
+			"INTERVAL" => SamplingStrategy.Interval,
+			_ => SamplingStrategy.ActivityTransition,
+		};
+
+	private static CoordinateUnits ParseCoordinateUnits(string? value) =>
+		value?.ToUpperInvariant() switch
+		{
+			"NORMALIZED" => CoordinateUnits.Normalized,
+			_ => CoordinateUnits.Percent,
+		};
+
+	private static bool HasThumbnailVariant(ScreenshotInfo info) =>
+		!info.IsThumbnail && File.Exists(GetThumbnailPath(info.FilePath));
+
+	private static string? GetThumbnailPath(string filePath) =>
+		filePath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
+			? string.Concat(filePath.AsSpan(0, filePath.Length - 4), ".thumbnail.jpg")
+			: null;
+
+	private static string? GetFullSizePath(string filePath) =>
+		filePath.Contains(".thumbnail.", StringComparison.OrdinalIgnoreCase)
+			? filePath.Replace(".thumbnail.", ".", StringComparison.OrdinalIgnoreCase)
+			: null;
+}
+#pragma warning restore IL2026
