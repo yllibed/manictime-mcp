@@ -27,7 +27,8 @@ public sealed class DatabaseActivityTransitionProvider : IActivityTransitionProv
 		// Find the Applications timeline
 		var timelines = await _timelineRepository.GetTimelinesAsync(cancellationToken).ConfigureAwait(false);
 		var appTimeline = timelines.FirstOrDefault(t =>
-			string.Equals(t.BaseSchemaName, "ManicTime/Applications", StringComparison.Ordinal));
+			t.SchemaName.Equals("ManicTime/Applications", StringComparison.OrdinalIgnoreCase) ||
+			t.BaseSchemaName.Equals("ManicTime/Applications", StringComparison.OrdinalIgnoreCase));
 
 		if (appTimeline is null)
 		{

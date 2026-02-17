@@ -165,15 +165,15 @@ public sealed class NarrativeTools
 		var startLocal = FormatLocalTime(start);
 		var endLocal = endDate + " 00:00:00";
 
-		var segments = await BuildSegmentsAsync(startLocal, endLocal, ct).ConfigureAwait(false);
+		var rawSegments = await BuildSegmentsAsync(startLocal, endLocal, ct).ConfigureAwait(false);
+		var segments = MergeConsecutiveSegments(rawSegments);
+		var totalMinutes = segments.Sum(s => s.DurationMinutes);
 		var totalSegments = segments.Count;
 		var isTruncated = segments.Count > MaxSegments;
 		if (isTruncated)
 		{
 			segments = segments.Take(MaxSegments).ToList();
 		}
-
-		var totalMinutes = segments.Sum(s => s.DurationMinutes);
 		var topApps = await GetTopAppsAsync(startDate, endDate, ct).ConfigureAwait(false);
 		var topWebsites = includeWebsites
 			? await GetTopWebsitesAsync(startDate, endDate, ct).ConfigureAwait(false)
@@ -275,7 +275,7 @@ public sealed class NarrativeTools
 
 		var activities = await _activityRepository.GetEnrichedActivitiesAsync(
 			appTimeline.ReportId, startLocal, endLocal,
-			limit: MaxSegments + 1, cancellationToken: ct).ConfigureAwait(false);
+			limit: QueryLimits.MaxActivities, cancellationToken: ct).ConfigureAwait(false);
 
 		return activities
 			.Select(a =>
@@ -298,6 +298,69 @@ public sealed class NarrativeTools
 				};
 			})
 			.ToList();
+	}
+
+	/// <summary>Merges consecutive segments with the same application into single entries.</summary>
+	internal static List<NarrativeSegment> MergeConsecutiveSegments(List<NarrativeSegment> segments)
+	{
+		if (segments.Count <= 1)
+		{
+			return segments;
+		}
+
+		var merged = new List<NarrativeSegment>(segments.Count);
+		var current = segments[0];
+
+		for (var i = 1; i < segments.Count; i++)
+		{
+			var next = segments[i];
+			if (string.Equals(current.Application, next.Application, StringComparison.Ordinal))
+			{
+				// Merge: extend end time, sum duration, union tags, keep first ref
+				var endDt = DateTime.ParseExact(next.End, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+				var startDt = DateTime.ParseExact(current.Start, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+				var mergedTags = MergeTags(current.Tags, next.Tags);
+				current = new NarrativeSegment
+				{
+					Start = current.Start,
+					End = next.End,
+					DurationMinutes = Math.Round((endDt - startDt).TotalMinutes, digits: 1),
+					Application = current.Application,
+					ApplicationColor = current.ApplicationColor,
+					Tags = mergedTags,
+					Refs = current.Refs,
+				};
+			}
+			else
+			{
+				merged.Add(current);
+				current = next;
+			}
+		}
+
+		merged.Add(current);
+		return merged;
+	}
+
+	private static string[]? MergeTags(string[]? a, string[]? b)
+	{
+		if (a is null or { Length: 0 })
+		{
+			return b is { Length: > 0 } ? b : null;
+		}
+
+		if (b is null or { Length: 0 })
+		{
+			return a;
+		}
+
+		var set = new HashSet<string>(a, StringComparer.Ordinal);
+		foreach (var tag in b)
+		{
+			set.Add(tag);
+		}
+
+		return [.. set.Order(StringComparer.Ordinal)];
 	}
 
 	private async Task<List<AppUsageEntry>> GetTopAppsAsync(string startDate, string endDate, CancellationToken ct)

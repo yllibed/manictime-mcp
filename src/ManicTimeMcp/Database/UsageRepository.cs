@@ -216,7 +216,6 @@ public sealed class UsageRepository : IUsageRepository
 				ct.ThrowIfCancellationRequested();
 				using var connection = _connectionFactory.CreateConnection();
 				using var command = connection.CreateCommand();
-				// Recursive CTE: split activities at hour boundaries.
 				command.CommandText = """
 					WITH RECURSIVE
 					base AS (
@@ -224,9 +223,11 @@ public sealed class UsageRepository : IUsageRepository
 					           COALESCE(g.Name, a.Name, '(unknown)') AS DisplayName,
 					           g.Color, g.Key
 					    FROM Ar_Activity a
-					    JOIN Ar_Timeline t ON a.ReportId = t.ReportId
 					    LEFT JOIN Ar_Group g ON a.GroupId = g.GroupId AND a.ReportId = g.ReportId
-					    WHERE t.BaseSchemaName = @schema
+					    WHERE a.ReportId IN (
+					        SELECT ReportId FROM Ar_Timeline
+					        WHERE SchemaName = @schema OR BaseSchemaName = @schema
+					    )
 					      AND a.EndLocalTime > @startDay
 					      AND a.StartLocalTime < @endDay
 					),
@@ -290,9 +291,11 @@ public sealed class UsageRepository : IUsageRepository
 					           g.Color, g.Key,
 					           DATE(a.StartLocalTime) AS StartDay
 					    FROM Ar_Activity a
-					    JOIN Ar_Timeline t ON a.ReportId = t.ReportId
 					    LEFT JOIN Ar_Group g ON a.GroupId = g.GroupId AND a.ReportId = g.ReportId
-					    WHERE t.BaseSchemaName = @schema
+					    WHERE a.ReportId IN (
+					        SELECT ReportId FROM Ar_Timeline
+					        WHERE SchemaName = @schema OR BaseSchemaName = @schema
+					    )
 					      AND a.EndLocalTime > @startDay
 					      AND a.StartLocalTime < @endDay
 					),
@@ -345,9 +348,11 @@ public sealed class UsageRepository : IUsageRepository
 					           COALESCE(g.Name, a.Name, '(unknown)') AS DisplayName,
 					           DATE(a.StartLocalTime) AS StartDay
 					    FROM Ar_Activity a
-					    JOIN Ar_Timeline t ON a.ReportId = t.ReportId
 					    LEFT JOIN Ar_Group g ON a.GroupId = g.GroupId AND a.ReportId = g.ReportId
-					    WHERE t.BaseSchemaName = 'ManicTime/Applications'
+					    WHERE a.ReportId IN (
+					        SELECT ReportId FROM Ar_Timeline
+					        WHERE SchemaName = @schema OR BaseSchemaName = @schema
+					    )
 					      AND a.EndLocalTime > @startDay
 					      AND a.StartLocalTime < @endDay
 					),
@@ -372,6 +377,7 @@ public sealed class UsageRepository : IUsageRepository
 					ORDER BY DisplayName, DayOfWeek
 					LIMIT @limit
 					""";
+				command.Parameters.AddWithValue("@schema", "ManicTime/Applications");
 				command.Parameters.AddWithValue("@startDay", startDay);
 				command.Parameters.AddWithValue("@endDay", endDay);
 				command.Parameters.AddWithValue("@limit", effectiveLimit);

@@ -355,6 +355,131 @@ public sealed class NarrativeToolTests
 		});
 	}
 
+	private static readonly EnrichedActivityDto[] ConsecutiveSameAppActivities =
+	[
+		new()
+		{
+			ActivityId = 1, ReportId = 1,
+			StartLocalTime = "2025-01-15 08:00:00", EndLocalTime = "2025-01-15 09:00:00",
+			Name = "VS Code", GroupId = null, GroupColor = "#007ACC",
+			CommonGroupName = "Visual Studio Code", Tags = ["coding"],
+		},
+		new()
+		{
+			ActivityId = 2, ReportId = 1,
+			StartLocalTime = "2025-01-15 09:00:00", EndLocalTime = "2025-01-15 10:00:00",
+			Name = "VS Code", GroupId = null, GroupColor = "#007ACC",
+			CommonGroupName = "Visual Studio Code", Tags = ["work"],
+		},
+		new()
+		{
+			ActivityId = 3, ReportId = 1,
+			StartLocalTime = "2025-01-15 10:00:00", EndLocalTime = "2025-01-15 11:00:00",
+			Name = "Chrome", GroupId = null, GroupColor = "#4285F4",
+			CommonGroupName = "Google Chrome",
+		},
+	];
+
+	[TestMethod]
+	public async Task GetActivityNarrative_MergesConsecutiveSameAppSegments()
+	{
+		await using var harness = new McpTestHarness((services, builder) =>
+		{
+			services.AddSingleton<ITimelineRepository>(new StubTimelineRepository(SampleTimelines));
+			services.AddSingleton<IActivityRepository>(new StubActivityRepository(
+				enrichedActivities: ConsecutiveSameAppActivities));
+			services.AddSingleton<IUsageRepository>(new StubUsageRepository(
+				dailyApp: SampleDailyAppUsage,
+				dailyWeb: SampleDailyWebUsage));
+			services.AddSingleton(CreateFullCapabilities());
+			builder.WithTools<NarrativeTools>();
+		});
+		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
+		var result = await client.CallToolAsync(
+			"get_activity_narrative",
+			new Dictionary<string, object?>(StringComparer.Ordinal)
+			{
+				["startDate"] = "2025-01-15",
+				["endDate"] = "2025-01-16",
+			}).ConfigureAwait(false);
+
+		result.IsError.Should().NotBeTrue();
+		var text = result.Content.OfType<TextContentBlock>().Single().Text;
+		var doc = JsonDocument.Parse(text);
+
+		// Two VS Code segments merged into one + one Chrome = 2 total segments
+		var segments = doc.RootElement.GetProperty("segments");
+		segments.GetArrayLength().Should().Be(2);
+
+		// First merged segment should span 08:00 - 10:00 (120 min)
+		var first = segments[0];
+		first.GetProperty("start").GetString().Should().Be("2025-01-15 08:00:00");
+		first.GetProperty("end").GetString().Should().Be("2025-01-15 10:00:00");
+		first.GetProperty("durationMinutes").GetDouble().Should().Be(120.0);
+
+		// Tags should be merged (union)
+		var tags = first.GetProperty("tags");
+		tags.GetArrayLength().Should().Be(2);
+	}
+
+	[TestMethod]
+	public async Task GetActivityNarrative_TotalMinutesReflectsAllActivities()
+	{
+		var manyActivities = GenerateAlternatingActivities(count: 250, minutesEach: 2);
+
+		await using var harness = new McpTestHarness((services, builder) =>
+		{
+			services.AddSingleton<ITimelineRepository>(new StubTimelineRepository(SampleTimelines));
+			services.AddSingleton<IActivityRepository>(new StubActivityRepository(
+				enrichedActivities: manyActivities));
+			services.AddSingleton<IUsageRepository>(new StubUsageRepository(
+				dailyApp: SampleDailyAppUsage,
+				dailyWeb: SampleDailyWebUsage));
+			services.AddSingleton(CreateFullCapabilities());
+			builder.WithTools<NarrativeTools>();
+		});
+		await using var client = await harness.CreateClientAsync().ConfigureAwait(false);
+		var result = await client.CallToolAsync(
+			"get_activity_narrative",
+			new Dictionary<string, object?>(StringComparer.Ordinal)
+			{
+				["startDate"] = "2025-01-15",
+				["endDate"] = "2025-01-16",
+			}).ConfigureAwait(false);
+
+		result.IsError.Should().NotBeTrue();
+		var text = result.Content.OfType<TextContentBlock>().Single().Text;
+		var doc = JsonDocument.Parse(text);
+
+		// totalActiveMinutes should reflect ALL 250 activities (500 min), not just truncated subset
+		var totalMinutes = doc.RootElement.GetProperty("totalActiveMinutes").GetDouble();
+		totalMinutes.Should().Be(500.0);
+	}
+
+	/// <summary>Generates activities alternating between 50 apps so consecutive merging is minimal.</summary>
+	private static EnrichedActivityDto[] GenerateAlternatingActivities(int count, int minutesEach)
+	{
+		var activities = new EnrichedActivityDto[count];
+		var baseTime = new DateTime(2025, 1, 15, 6, 0, 0);
+		for (var i = 0; i < count; i++)
+		{
+			var start = baseTime.AddMinutes(i * minutesEach);
+			var end = start.AddMinutes(minutesEach);
+			activities[i] = new EnrichedActivityDto
+			{
+				ActivityId = i + 1,
+				ReportId = 1,
+				StartLocalTime = start.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture),
+				EndLocalTime = end.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture),
+				Name = $"App{i % 50}",
+				GroupId = null,
+				CommonGroupName = $"App{i % 50}",
+			};
+		}
+
+		return activities;
+	}
+
 	private static QueryCapabilityMatrix CreateFullCapabilities()
 	{
 		return new QueryCapabilityMatrix([

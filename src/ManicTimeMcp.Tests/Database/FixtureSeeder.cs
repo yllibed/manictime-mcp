@@ -121,6 +121,31 @@ internal static class FixtureSeeder
 			name: "code.exe", groupId: 1);
 	}
 
+	/// <summary>Seeds data with GenericGroup base schema matching real ManicTime databases.</summary>
+	public static void SeedGenericGroupSchemaData(SqliteConnection connection)
+	{
+		// Real ManicTime uses BaseSchemaName = "ManicTime/GenericGroup" for Applications/Documents/BrowserUrls
+		InsertTimeline(connection, reportId: 1, schemaName: "ManicTime/Applications", baseSchemaName: "ManicTime/GenericGroup");
+		InsertTimeline(connection, reportId: 2, schemaName: "ManicTime/Documents", baseSchemaName: "ManicTime/GenericGroup");
+
+		// Groups for Applications timeline
+		InsertGroup(connection, groupId: 1, reportId: 1, name: "VS Code", color: "#007ACC", key: "code.exe");
+		InsertGroup(connection, groupId: 2, reportId: 1, name: "Firefox", color: "#FF7139", key: "firefox.exe");
+
+		// Activities for Applications
+		InsertActivity(connection, activityId: 1, reportId: 1,
+			start: "2025-01-15 08:00:00", end: "2025-01-15 10:00:00",
+			name: "code.exe", groupId: 1);
+		InsertActivity(connection, activityId: 2, reportId: 1,
+			start: "2025-01-15 10:00:00", end: "2025-01-15 12:00:00",
+			name: "firefox.exe", groupId: 2);
+
+		// Activities for Documents
+		InsertActivity(connection, activityId: 3, reportId: 2,
+			start: "2025-01-15 08:00:00", end: "2025-01-15 10:00:00",
+			name: "README.md", groupId: null);
+	}
+
 	private static void InsertTimeline(SqliteConnection connection, long reportId, string schemaName, string baseSchemaName)
 	{
 		using var command = connection.CreateCommand();

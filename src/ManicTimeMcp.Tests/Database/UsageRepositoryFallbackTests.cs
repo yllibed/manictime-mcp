@@ -139,6 +139,52 @@ public sealed class UsageRepositoryFallbackTests
 		hour9.Sum(r => r.TotalSeconds).Should().BeApproximately(900, 1.0, "15 min in hour 9");
 	}
 
+	[TestMethod]
+	public async Task GetDailyAppUsageAsync_Fallback_GenericGroupBaseSchema_FindsActivities()
+	{
+		using var fixture = FixtureDatabase.CreateCoreOnly(FixtureSeeder.SeedGenericGroupSchemaData);
+		var sut = CreateDegradedRepository(fixture);
+
+		var results = await sut.GetDailyAppUsageAsync("2025-01-15", "2025-01-16").ConfigureAwait(false);
+
+		// Should find activities even though BaseSchemaName is "ManicTime/GenericGroup"
+		results.Count.Should().BeGreaterThan(0);
+		results.Should().Contain(r => string.Equals(r.Name, "VS Code", StringComparison.Ordinal));
+	}
+
+	[TestMethod]
+	public async Task GetHourlyAppUsageAsync_Fallback_GenericGroupBaseSchema_FindsActivities()
+	{
+		using var fixture = FixtureDatabase.CreateCoreOnly(FixtureSeeder.SeedGenericGroupSchemaData);
+		var sut = CreateDegradedRepository(fixture);
+
+		var results = await sut.GetHourlyAppUsageAsync("2025-01-15", "2025-01-16").ConfigureAwait(false);
+
+		results.Count.Should().BeGreaterThan(0);
+	}
+
+	[TestMethod]
+	public async Task GetDayOfWeekAppUsageAsync_Fallback_GenericGroupBaseSchema_FindsActivities()
+	{
+		using var fixture = FixtureDatabase.CreateCoreOnly(FixtureSeeder.SeedGenericGroupSchemaData);
+		var sut = CreateDegradedRepository(fixture);
+
+		var results = await sut.GetDayOfWeekAppUsageAsync("2025-01-15", "2025-01-16").ConfigureAwait(false);
+
+		results.Count.Should().BeGreaterThan(0);
+	}
+
+	[TestMethod]
+	public async Task GetDailyDocUsageAsync_Fallback_GenericGroupBaseSchema_FindsActivities()
+	{
+		using var fixture = FixtureDatabase.CreateCoreOnly(FixtureSeeder.SeedGenericGroupSchemaData);
+		var sut = CreateDegradedRepository(fixture);
+
+		var results = await sut.GetDailyDocUsageAsync("2025-01-15", "2025-01-16").ConfigureAwait(false);
+
+		results.Count.Should().BeGreaterThan(0);
+	}
+
 	private static UsageRepository CreateDegradedRepository(FixtureDatabase fixture)
 	{
 		var factory = new FixtureConnectionFactory(fixture.FilePath);
