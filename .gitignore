@@ -417,5 +417,8 @@ ehthumbs.db
 Desktop.ini
 .DS_Store
 
+# Local ManicTime database copies (personal data, large binaries)
+.database/
+
 # Temporary download artifacts
 *.tmp

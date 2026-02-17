@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using ManicTimeMcp.Database;
 using ManicTimeMcp.Mcp.Models;
+using ManicTimeMcp.Screenshots;
 using Microsoft.Data.Sqlite;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -23,6 +24,8 @@ public sealed class NarrativeTools
 	private readonly IActivityRepository _activityRepository;
 	private readonly ITimelineRepository _timelineRepository;
 	private readonly IUsageRepository _usageRepository;
+	private readonly IScreenshotService? _screenshotService;
+	private readonly IScreenshotRegistry? _screenshotRegistry;
 	private readonly QueryCapabilityMatrix _capabilities;
 
 	/// <summary>Creates narrative tools with injected repositories.</summary>
@@ -30,25 +33,31 @@ public sealed class NarrativeTools
 		IActivityRepository activityRepository,
 		ITimelineRepository timelineRepository,
 		IUsageRepository usageRepository,
-		QueryCapabilityMatrix capabilities)
+		QueryCapabilityMatrix capabilities,
+		IScreenshotService? screenshotService = null,
+		IScreenshotRegistry? screenshotRegistry = null)
 	{
 		_activityRepository = activityRepository;
 		_timelineRepository = timelineRepository;
 		_usageRepository = usageRepository;
 		_capabilities = capabilities;
+		_screenshotService = screenshotService;
+		_screenshotRegistry = screenshotRegistry;
 	}
 
 	/// <summary>Returns a daily summary by delegating to narrative logic.</summary>
 	[McpServerTool(Name = "get_daily_summary", ReadOnly = true), Description("Get a structured summary of activity for a specific date, with segments, top applications, and websites.")]
 	public async Task<CallToolResult> GetDailySummaryAsync(
 		[Description("Date to summarize (ISO-8601, e.g. 2025-01-15)")] string date,
+		[Description("Include activity segments in response (default true). Set false to reduce payload when only summary data needed.")] bool includeSegments = true,
+		[Description("Minimum segment duration in minutes to include (default 0). Useful for filtering noise — e.g. 0.5 filters sub-30s segments.")] double minDurationMinutes = 0,
 		CancellationToken cancellationToken = default)
 	{
 		try
 		{
 			var parsed = DateTime.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
 			var endDate = parsed.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-			var response = await BuildNarrativeAsync(date, endDate, includeWebsites: true, cancellationToken).ConfigureAwait(false);
+			var response = await BuildNarrativeAsync(date, endDate, includeWebsites: true, includeSegments, minDurationMinutes, cancellationToken).ConfigureAwait(false);
 			return ToolResults.Success(JsonSerializer.Serialize(response, JsonOptions.Default));
 		}
 		catch (FormatException ex)
@@ -71,11 +80,12 @@ public sealed class NarrativeTools
 		[Description("Start date (ISO-8601, inclusive)")] string startDate,
 		[Description("End date (ISO-8601, exclusive)")] string endDate,
 		[Description("Include website usage (default true)")] bool includeWebsites = true,
+		[Description("Minimum segment duration in minutes to include (default 0). Useful for filtering noise — e.g. 0.5 filters sub-30s segments.")] double minDurationMinutes = 0,
 		CancellationToken cancellationToken = default)
 	{
 		try
 		{
-			var response = await BuildNarrativeAsync(startDate, endDate, includeWebsites, cancellationToken).ConfigureAwait(false);
+			var response = await BuildNarrativeAsync(startDate, endDate, includeWebsites, includeSegments: true, minDurationMinutes, cancellationToken).ConfigureAwait(false);
 			return ToolResults.Success(JsonSerializer.Serialize(response, JsonOptions.Default));
 		}
 		catch (FormatException ex)
@@ -159,21 +169,46 @@ public sealed class NarrativeTools
 	}
 
 	private async Task<NarrativeResponse> BuildNarrativeAsync(
-		string startDate, string endDate, bool includeWebsites, CancellationToken ct)
+		string startDate, string endDate, bool includeWebsites, bool includeSegments,
+		double minDurationMinutes, CancellationToken ct)
 	{
 		var (start, _) = ParseDates(startDate, endDate);
 		var startLocal = FormatLocalTime(start);
 		var endLocal = endDate + " 00:00:00";
 
-		var rawSegments = await BuildSegmentsAsync(startLocal, endLocal, ct).ConfigureAwait(false);
-		var segments = MergeConsecutiveSegments(rawSegments);
-		var totalMinutes = segments.Sum(s => s.DurationMinutes);
-		var totalSegments = segments.Count;
-		var isTruncated = segments.Count > MaxSegments;
-		if (isTruncated)
+		List<NarrativeSegment> segments;
+		double totalMinutes;
+		int totalSegments;
+		var isTruncated = false;
+
+		if (includeSegments)
 		{
-			segments = segments.Take(MaxSegments).ToList();
+			var rawSegments = await BuildSegmentsAsync(startLocal, endLocal, ct).ConfigureAwait(false);
+			segments = MergeConsecutiveSegments(rawSegments);
+			totalMinutes = segments.Sum(s => s.DurationMinutes);
+
+			if (minDurationMinutes > 0)
+			{
+				segments = segments.Where(s => s.DurationMinutes >= minDurationMinutes).ToList();
+			}
+
+			totalSegments = segments.Count;
+			isTruncated = segments.Count > MaxSegments;
+			if (isTruncated)
+			{
+				segments = segments.Take(MaxSegments).ToList();
+			}
 		}
+		else
+		{
+			// Compute totalMinutes without building full segment list — use app usage aggregate
+			var appUsage = await _usageRepository.GetDailyAppUsageAsync(
+				startDate, endDate, cancellationToken: ct).ConfigureAwait(false);
+			totalMinutes = Math.Round(appUsage.Sum(a => a.TotalSeconds) / 60.0, digits: 1);
+			totalSegments = 0;
+			segments = [];
+		}
+
 		var topApps = await GetTopAppsAsync(startDate, endDate, ct).ConfigureAwait(false);
 		var topWebsites = includeWebsites
 			? await GetTopWebsitesAsync(startDate, endDate, ct).ConfigureAwait(false)
@@ -273,10 +308,54 @@ public sealed class NarrativeTools
 			return [];
 		}
 
-		var activities = await _activityRepository.GetEnrichedActivitiesAsync(
+		var activitiesTask = _activityRepository.GetEnrichedActivitiesAsync(
 			appTimeline.ReportId, startLocal, endLocal,
-			limit: QueryLimits.MaxActivities, cancellationToken: ct).ConfigureAwait(false);
+			limit: QueryLimits.MaxActivities, cancellationToken: ct);
 
+		// B5: Find Documents timeline for cross-timeline correlation
+		var docTimeline = timelines.FirstOrDefault(
+			t => t.SchemaName.Equals("ManicTime/Documents", StringComparison.OrdinalIgnoreCase) ||
+				 t.BaseSchemaName.Equals("ManicTime/Documents", StringComparison.OrdinalIgnoreCase));
+
+		var docActivitiesTask = docTimeline is not null
+			? _activityRepository.GetActivitiesAsync(
+				docTimeline.ReportId, startLocal, endLocal,
+				limit: QueryLimits.MaxActivities, cancellationToken: ct)
+			: Task.FromResult<IReadOnlyList<Database.Dto.ActivityDto>>([]);
+
+		var activities = await activitiesTask.ConfigureAwait(false);
+		var docActivities = await docActivitiesTask.ConfigureAwait(false);
+
+		var screenshots = await LoadScreenshotsAsync(startLocal, endLocal, ct).ConfigureAwait(false);
+
+		return MapToSegments(activities, docActivities, screenshots);
+	}
+
+	private async Task<IReadOnlyList<ScreenshotInfo>?> LoadScreenshotsAsync(
+		string startLocal, string endLocal, CancellationToken ct)
+	{
+		if (_screenshotService is null || _screenshotRegistry is null)
+		{
+			return null;
+		}
+
+		var startDt = DateTime.ParseExact(startLocal, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+		var endDt = DateTime.ParseExact(endLocal, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+		var selection = await _screenshotService.ListScreenshotsAsync(
+			new ScreenshotQuery
+			{
+				StartLocalTime = startDt,
+				EndLocalTime = endDt,
+				PreferThumbnails = true,
+			}, ct).ConfigureAwait(false);
+		return selection.Screenshots;
+	}
+
+	private static List<NarrativeSegment> MapToSegments(
+		IReadOnlyList<Database.Dto.EnrichedActivityDto> activities,
+		IReadOnlyList<Database.Dto.ActivityDto> docActivities,
+		IReadOnlyList<ScreenshotInfo>? screenshots)
+	{
 		return activities
 			.Select(a =>
 			{
@@ -289,15 +368,92 @@ public sealed class NarrativeTools
 					DurationMinutes = Math.Round((endDt - startDt).TotalMinutes, digits: 1),
 					Application = a.CommonGroupName ?? a.GroupName ?? a.Name,
 					ApplicationColor = a.GroupColor,
+					Document = FindOverlappingDocument(docActivities, startDt, endDt),
 					Tags = a.Tags is { Length: > 0 } ? a.Tags : null,
 					Refs = new SegmentRefs
 					{
 						TimelineRef = a.ReportId,
 						ActivityRef = a.ActivityId,
+						ScreenshotRef = FindClosestScreenshot(screenshots, startDt, endDt),
 					},
 				};
 			})
 			.ToList();
+	}
+
+	/// <summary>
+	/// Finds the document name from the Documents timeline that overlaps the given time range.
+	/// Returns the name of the document with the most overlap, or null if none found.
+	/// </summary>
+	private static string? FindOverlappingDocument(
+		IReadOnlyList<Database.Dto.ActivityDto> docActivities, DateTime segStart, DateTime segEnd)
+	{
+		if (docActivities.Count == 0)
+		{
+			return null;
+		}
+
+		string? bestName = null;
+		var bestOverlap = TimeSpan.Zero;
+
+		foreach (var doc in docActivities)
+		{
+			var docStart = DateTime.ParseExact(doc.StartLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+			if (docStart >= segEnd)
+			{
+				break; // Activities are sorted by start time; no more overlaps possible
+			}
+
+			var docEnd = DateTime.ParseExact(doc.EndLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+			if (docEnd <= segStart)
+			{
+				continue;
+			}
+
+			var overlapStart = docStart > segStart ? docStart : segStart;
+			var overlapEnd = docEnd < segEnd ? docEnd : segEnd;
+			var overlap = overlapEnd - overlapStart;
+			if (overlap > bestOverlap)
+			{
+				bestOverlap = overlap;
+				bestName = doc.Name;
+			}
+		}
+
+		return bestName;
+	}
+
+	/// <summary>
+	/// Finds the screenshot closest to the midpoint of a segment's time range.
+	/// Returns the screenshot's registered ref string, or null if no screenshots available.
+	/// </summary>
+	private static string? FindClosestScreenshot(
+		IReadOnlyList<ScreenshotInfo>? screenshots, DateTime segStart, DateTime segEnd)
+	{
+		if (screenshots is null or { Count: 0 })
+		{
+			return null;
+		}
+
+		var midpoint = segStart.AddTicks((segEnd - segStart).Ticks / 2);
+		ScreenshotInfo? closest = null;
+		var closestDistance = TimeSpan.MaxValue;
+
+		foreach (var shot in screenshots)
+		{
+			var distance = (shot.LocalTimestamp - midpoint).Duration();
+			if (distance < closestDistance)
+			{
+				closestDistance = distance;
+				closest = shot;
+			}
+			else if (shot.LocalTimestamp > segEnd)
+			{
+				break; // Screenshots past the segment end won't be closer
+			}
+		}
+
+		return closest?.Ref;
 	}
 
 	/// <summary>Merges consecutive segments with the same application into single entries.</summary>

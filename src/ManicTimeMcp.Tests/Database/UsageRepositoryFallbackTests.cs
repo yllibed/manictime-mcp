@@ -185,6 +185,77 @@ public sealed class UsageRepositoryFallbackTests
 		results.Count.Should().BeGreaterThan(0);
 	}
 
+	[TestMethod]
+	public async Task GetDailyWebUsageAsync_Fallback_WebInDocuments_FindsWebOnly()
+	{
+		using var fixture = FixtureDatabase.CreateCoreOnly(FixtureSeeder.SeedWebInDocumentsData);
+		var sut = CreateDegradedRepository(fixture);
+
+		var results = await sut.GetDailyWebUsageAsync("2025-01-15", "2025-01-16").ConfigureAwait(false);
+
+		// Should find web activities from Documents timeline using GroupType filter
+		results.Count.Should().BeGreaterThan(0);
+		results.Should().Contain(r => string.Equals(r.Name, "github.com", StringComparison.Ordinal));
+		// Should NOT include file entries from the same timeline
+		results.Should().NotContain(r => string.Equals(r.Name, "README.md", StringComparison.Ordinal));
+	}
+
+	[TestMethod]
+	public async Task GetHourlyWebUsageAsync_Fallback_WebInDocuments_FindsWebOnly()
+	{
+		using var fixture = FixtureDatabase.CreateCoreOnly(FixtureSeeder.SeedWebInDocumentsData);
+		var sut = CreateDegradedRepository(fixture);
+
+		var results = await sut.GetHourlyWebUsageAsync("2025-01-15", "2025-01-16").ConfigureAwait(false);
+
+		results.Count.Should().BeGreaterThan(0);
+		// Should NOT include file entries
+		results.Should().NotContain(r => string.Equals(r.Name, "README.md", StringComparison.Ordinal));
+	}
+
+	[TestMethod]
+	public async Task GetDailyDocUsageAsync_Fallback_WebInDocuments_FindsFilesOnly()
+	{
+		using var fixture = FixtureDatabase.CreateCoreOnly(FixtureSeeder.SeedWebInDocumentsData);
+		var sut = CreateDegradedRepository(fixture);
+
+		var results = await sut.GetDailyDocUsageAsync("2025-01-15", "2025-01-16").ConfigureAwait(false);
+
+		// Should find only file activities, not web
+		results.Count.Should().Be(1);
+		results.Should().Contain(r => string.Equals(r.Name, "README.md", StringComparison.Ordinal));
+	}
+
+	[TestMethod]
+	public async Task GetDailyDocUsageAsync_Fallback_FiltersbyGroupType()
+	{
+		using var fixture = FixtureDatabase.CreateCoreOnly(FixtureSeeder.SeedDocWithUrlsData);
+		var sut = CreateDegradedRepository(fixture);
+
+		var results = await sut.GetDailyDocUsageAsync("2025-01-15", "2025-01-16").ConfigureAwait(false);
+
+		// Should include only ManicTime/Files entries, excluding websites and chat
+		results.Should().Contain(r => r.Name.Contains("Program.cs", StringComparison.Ordinal));
+		results.Should().NotContain(r => string.Equals(r.Name, "github.com", StringComparison.Ordinal));
+		results.Should().NotContain(r => string.Equals(r.Name, "localhost", StringComparison.Ordinal));
+		results.Should().NotContain(r => string.Equals(r.Name, "Team Chat", StringComparison.Ordinal));
+	}
+
+	[TestMethod]
+	public async Task GetDailyWebUsageAsync_Fallback_FiltersWebsitesFromDocuments()
+	{
+		using var fixture = FixtureDatabase.CreateCoreOnly(FixtureSeeder.SeedDocWithUrlsData);
+		var sut = CreateDegradedRepository(fixture);
+
+		var results = await sut.GetDailyWebUsageAsync("2025-01-15", "2025-01-16").ConfigureAwait(false);
+
+		// Should include only ManicTime/WebSites entries from the Documents timeline
+		results.Should().Contain(r => string.Equals(r.Name, "github.com", StringComparison.Ordinal));
+		results.Should().Contain(r => string.Equals(r.Name, "localhost", StringComparison.Ordinal));
+		results.Should().NotContain(r => r.Name.Contains("Program.cs", StringComparison.Ordinal));
+		results.Should().NotContain(r => string.Equals(r.Name, "Team Chat", StringComparison.Ordinal));
+	}
+
 	private static UsageRepository CreateDegradedRepository(FixtureDatabase fixture)
 	{
 		var factory = new FixtureConnectionFactory(fixture.FilePath);

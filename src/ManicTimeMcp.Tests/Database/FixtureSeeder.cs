@@ -20,7 +20,7 @@ internal static class FixtureSeeder
 		InsertGroup(connection, groupId: 3, reportId: 2, name: "Terminal", color: "#0000FF", key: "WindowsTerminal.exe");
 
 		// Groups for Documents timeline
-		InsertGroup(connection, groupId: 4, reportId: 3, name: "Project.sln");
+		InsertGroup(connection, groupId: 4, reportId: 3, name: "Project.sln", groupType: "ManicTime/Files");
 
 		// Activities for Computer Usage
 		InsertActivity(connection, activityId: 1, reportId: 1,
@@ -132,6 +132,9 @@ internal static class FixtureSeeder
 		InsertGroup(connection, groupId: 1, reportId: 1, name: "VS Code", color: "#007ACC", key: "code.exe");
 		InsertGroup(connection, groupId: 2, reportId: 1, name: "Firefox", color: "#FF7139", key: "firefox.exe");
 
+		// Groups for Documents timeline
+		InsertGroup(connection, groupId: 1, reportId: 2, name: "README.md", groupType: "ManicTime/Files");
+
 		// Activities for Applications
 		InsertActivity(connection, activityId: 1, reportId: 1,
 			start: "2025-01-15 08:00:00", end: "2025-01-15 10:00:00",
@@ -143,7 +146,7 @@ internal static class FixtureSeeder
 		// Activities for Documents
 		InsertActivity(connection, activityId: 3, reportId: 2,
 			start: "2025-01-15 08:00:00", end: "2025-01-15 10:00:00",
-			name: "README.md", groupId: null);
+			name: "README.md", groupId: 1);
 	}
 
 	/// <summary>
@@ -182,6 +185,59 @@ internal static class FixtureSeeder
 			name: "design.docx", groupId: 2);
 	}
 
+	/// <summary>
+	/// Seeds web data inside the Documents timeline with GroupType discrimination,
+	/// matching the real ManicTime DB structure where web browsing data lives in the
+	/// Documents timeline rather than a dedicated browser timeline.
+	/// </summary>
+	public static void SeedWebInDocumentsData(SqliteConnection connection)
+	{
+		InsertTimeline(connection, reportId: 1, schemaName: "ManicTime/Applications", baseSchemaName: "ManicTime/GenericGroup");
+		InsertTimeline(connection, reportId: 2, schemaName: "ManicTime/Documents", baseSchemaName: "ManicTime/GenericGroup");
+
+		// Web entries in the Documents timeline (GroupType = ManicTime/WebSites)
+		InsertGroup(connection, groupId: 1, reportId: 2, name: "github.com", groupType: "ManicTime/WebSites");
+		InsertGroup(connection, groupId: 2, reportId: 2, name: "stackoverflow.com", groupType: "ManicTime/WebSites");
+		// File entry in the same timeline (GroupType = ManicTime/Files)
+		InsertGroup(connection, groupId: 3, reportId: 2, name: "README.md", groupType: "ManicTime/Files");
+
+		InsertActivity(connection, activityId: 1, reportId: 2,
+			start: "2025-01-15 09:00:00", end: "2025-01-15 10:00:00",
+			name: "github.com", groupId: 1);
+		InsertActivity(connection, activityId: 2, reportId: 2,
+			start: "2025-01-15 10:00:00", end: "2025-01-15 11:00:00",
+			name: "stackoverflow.com", groupId: 2);
+		InsertActivity(connection, activityId: 3, reportId: 2,
+			start: "2025-01-15 11:00:00", end: "2025-01-15 12:00:00",
+			name: "README.md", groupId: 3);
+	}
+
+	/// <summary>Seeds document data containing files, websites, and chat for GroupType-based filtering tests.</summary>
+	public static void SeedDocWithUrlsData(SqliteConnection connection)
+	{
+		InsertTimeline(connection, reportId: 1, schemaName: "ManicTime/Documents", baseSchemaName: "ManicTime/GenericGroup");
+
+		// Real ManicTime uses GroupType to distinguish content types within the Documents timeline.
+		// Website names are bare domains (not full URLs), file names are paths or titles.
+		InsertGroup(connection, groupId: 1, reportId: 1, name: @"C:\src\project\Program.cs", groupType: "ManicTime/Files");
+		InsertGroup(connection, groupId: 2, reportId: 1, name: "github.com", groupType: "ManicTime/WebSites");
+		InsertGroup(connection, groupId: 3, reportId: 1, name: "localhost", groupType: "ManicTime/WebSites");
+		InsertGroup(connection, groupId: 4, reportId: 1, name: "Team Chat", groupType: "ManicTime/Chat");
+
+		InsertActivity(connection, activityId: 1, reportId: 1,
+			start: "2025-01-15 08:00:00", end: "2025-01-15 10:00:00",
+			name: @"C:\src\project\Program.cs", groupId: 1);
+		InsertActivity(connection, activityId: 2, reportId: 1,
+			start: "2025-01-15 10:00:00", end: "2025-01-15 11:00:00",
+			name: "github.com", groupId: 2);
+		InsertActivity(connection, activityId: 3, reportId: 1,
+			start: "2025-01-15 11:00:00", end: "2025-01-15 12:00:00",
+			name: "localhost", groupId: 3);
+		InsertActivity(connection, activityId: 4, reportId: 1,
+			start: "2025-01-15 12:00:00", end: "2025-01-15 12:30:00",
+			name: "Team Chat", groupId: 4);
+	}
+
 	private static void InsertTimeline(SqliteConnection connection, long reportId, string schemaName, string baseSchemaName)
 	{
 		using var command = connection.CreateCommand();
@@ -193,15 +249,17 @@ internal static class FixtureSeeder
 	}
 
 	private static void InsertGroup(
-		SqliteConnection connection, long groupId, long reportId, string name, string? color = null, string? key = null)
+		SqliteConnection connection, long groupId, long reportId, string name,
+		string? color = null, string? key = null, string? groupType = null)
 	{
 		using var command = connection.CreateCommand();
-		command.CommandText = "INSERT INTO Ar_Group (GroupId, ReportId, Name, Color, Key) VALUES (@id, @report, @name, @color, @key)";
+		command.CommandText = "INSERT INTO Ar_Group (GroupId, ReportId, Name, Color, Key, GroupType) VALUES (@id, @report, @name, @color, @key, @groupType)";
 		command.Parameters.AddWithValue("@id", groupId);
 		command.Parameters.AddWithValue("@report", reportId);
 		command.Parameters.AddWithValue("@name", name);
 		command.Parameters.AddWithValue("@color", color is not null ? color : DBNull.Value);
 		command.Parameters.AddWithValue("@key", key is not null ? key : DBNull.Value);
+		command.Parameters.AddWithValue("@groupType", groupType is not null ? groupType : DBNull.Value);
 		command.ExecuteNonQuery();
 	}
 

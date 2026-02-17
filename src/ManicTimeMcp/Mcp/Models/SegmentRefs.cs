@@ -8,4 +8,7 @@ internal sealed class SegmentRefs
 
 	/// <summary>Activity identifier.</summary>
 	public required long ActivityRef { get; init; }
+
+	/// <summary>Closest screenshot reference, or null if no screenshot exists for this segment's time range.</summary>
+	public string? ScreenshotRef { get; init; }
 }

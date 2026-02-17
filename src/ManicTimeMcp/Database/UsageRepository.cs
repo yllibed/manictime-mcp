@@ -6,6 +6,20 @@ namespace ManicTimeMcp.Database;
 /// <summary>Read-only repository for pre-aggregated usage data backed by SQLite.</summary>
 public sealed class UsageRepository : IUsageRepository
 {
+	/// <summary>
+	/// Known schema name candidates for web/browser timelines.
+	/// In most ManicTime installations, web browsing data lives inside the Documents timeline
+	/// with <c>Ar_Group.GroupType = "ManicTime/WebSites"</c>. Some versions may also have
+	/// dedicated browser timelines with their own schema names.
+	/// </summary>
+	private static readonly string[] WebSchemaNames = ["ManicTime/Documents", "ManicTime/BrowserUrls", "ManicTime/WebSites"];
+
+	/// <summary>Group type value for web browsing entries within the Documents timeline.</summary>
+	private const string WebGroupType = "ManicTime/WebSites";
+
+	/// <summary>Group type value for file/document entries within the Documents timeline.</summary>
+	private const string FilesGroupType = "ManicTime/Files";
+
 	private readonly IDbConnectionFactory _connectionFactory;
 	private readonly QueryCapabilityMatrix _capabilities;
 	private readonly ILogger<UsageRepository> _logger;
@@ -26,35 +40,35 @@ public sealed class UsageRepository : IUsageRepository
 		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default) =>
 		_capabilities.HasHourlyUsage
 			? GetHourlyUsageAsync("Ar_ActivityByHour", startDay, endDay, limit, cancellationToken)
-			: GetHourlyUsageFallbackAsync("ManicTime/Applications", startDay, endDay, limit, cancellationToken);
+			: GetHourlyUsageFallbackAsync(["ManicTime/Applications"], startDay, endDay, limit, cancellationToken);
 
 	/// <inheritdoc />
 	public Task<IReadOnlyList<HourlyUsageDto>> GetHourlyWebUsageAsync(
 		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default) =>
 		_capabilities.HasHourlyUsage
 			? GetHourlyUsageAsync("Ar_ActivityByHour", startDay, endDay, limit, cancellationToken)
-			: GetHourlyUsageFallbackAsync("ManicTime/BrowserUrls", startDay, endDay, limit, cancellationToken);
+			: GetHourlyUsageFallbackAsync(WebSchemaNames, startDay, endDay, limit, cancellationToken, WebGroupType);
 
 	/// <inheritdoc />
 	public Task<IReadOnlyList<DailyUsageDto>> GetDailyAppUsageAsync(
 		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default) =>
 		_capabilities.HasPreAggregatedAppUsage
 			? GetDailyUsageAsync("Ar_ApplicationByDay", startDay, endDay, limit, cancellationToken)
-			: GetDailyUsageFallbackAsync("ManicTime/Applications", startDay, endDay, limit, cancellationToken);
+			: GetDailyUsageFallbackAsync(["ManicTime/Applications"], startDay, endDay, limit, cancellationToken);
 
 	/// <inheritdoc />
 	public Task<IReadOnlyList<DailyUsageDto>> GetDailyWebUsageAsync(
 		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default) =>
 		_capabilities.HasPreAggregatedWebUsage
 			? GetDailyUsageAsync("Ar_WebSiteByDay", startDay, endDay, limit, cancellationToken)
-			: GetDailyUsageFallbackAsync("ManicTime/BrowserUrls", startDay, endDay, limit, cancellationToken);
+			: GetDailyUsageFallbackAsync(WebSchemaNames, startDay, endDay, limit, cancellationToken, WebGroupType);
 
 	/// <inheritdoc />
 	public Task<IReadOnlyList<DailyUsageDto>> GetDailyDocUsageAsync(
 		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default) =>
 		_capabilities.HasPreAggregatedDocUsage
 			? GetDailyUsageAsync("Ar_DocumentByDay", startDay, endDay, limit, cancellationToken)
-			: GetDailyUsageFallbackAsync("ManicTime/Documents", startDay, endDay, limit, cancellationToken);
+			: GetDailyUsageFallbackAsync(["ManicTime/Documents"], startDay, endDay, limit, cancellationToken, FilesGroupType);
 
 	/// <inheritdoc />
 	public Task<IReadOnlyList<DayOfWeekUsageDto>> GetDayOfWeekAppUsageAsync(
@@ -204,10 +218,12 @@ public sealed class UsageRepository : IUsageRepository
 	// ── Fallback paths (compute from Ar_Activity) ──
 
 	private Task<IReadOnlyList<HourlyUsageDto>> GetHourlyUsageFallbackAsync(
-		string baseSchemaName, string startDay, string endDay, int? limit, CancellationToken cancellationToken)
+		string[] schemaNames, string startDay, string endDay, int? limit,
+		CancellationToken cancellationToken, string? groupType = null)
 	{
 		var effectiveLimit = QueryLimits.Clamp(limit, QueryLimits.DefaultUsageLimit, QueryLimits.MaxHourlyUsageRows);
-		var queryName = string.Concat("GetHourlyUsage(Fallback:", baseSchemaName, ")");
+		var queryName = string.Concat("GetHourlyUsage(Fallback:", string.Join('|', schemaNames), ")");
+		var (schemaFilter, schemaParams) = BuildSchemaFilter(schemaNames);
 
 		return SqliteRetryHelper.ExecuteWithRetryAsync<IReadOnlyList<HourlyUsageDto>>(
 			_logger,
@@ -216,113 +232,30 @@ public sealed class UsageRepository : IUsageRepository
 				ct.ThrowIfCancellationRequested();
 				using var connection = _connectionFactory.CreateConnection();
 				using var command = connection.CreateCommand();
-				command.CommandText = """
-					WITH RECURSIVE
-					base AS (
-					    SELECT a.StartLocalTime, a.EndLocalTime,
-					           COALESCE(g.Name, a.Name, '(unknown)') AS DisplayName,
-					           g.Color, g.Key
-					    FROM Ar_Activity a
-					    LEFT JOIN Ar_Group g ON a.GroupId = g.GroupId AND a.ReportId = g.ReportId
-					    WHERE a.ReportId IN (
-					        SELECT ReportId FROM Ar_Timeline
-					        WHERE SchemaName = @schema OR BaseSchemaName = @schema
-					    )
-					      AND a.EndLocalTime > @startDay
-					      AND a.StartLocalTime < @endDay
-					),
-					hours AS (
-					    SELECT DisplayName, Color, Key,
-					           StartLocalTime AS SegStart,
-					           MIN(EndLocalTime,
-					               strftime('%Y-%m-%d %H:00:00', StartLocalTime, '+1 hour')) AS SegEnd,
-					           EndLocalTime
-					    FROM base
-					    UNION ALL
-					    SELECT DisplayName, Color, Key,
-					           SegEnd AS SegStart,
-					           MIN(EndLocalTime,
-					               strftime('%Y-%m-%d %H:00:00', SegEnd, '+1 hour')) AS SegEnd,
-					           EndLocalTime
-					    FROM hours
-					    WHERE SegEnd < EndLocalTime
-					)
-					SELECT DATE(SegStart) AS Day,
-					       CAST(strftime('%H', SegStart) AS INTEGER) AS Hour,
-					       DisplayName, Color, Key,
-					       SUM((JULIANDAY(SegEnd) - JULIANDAY(SegStart)) * 86400) AS TotalSeconds
-					FROM hours
-					WHERE DATE(SegStart) >= @startDay AND DATE(SegStart) < @endDay
-					GROUP BY Day, Hour, DisplayName, Color, Key
-					ORDER BY Day, Hour, TotalSeconds DESC
-					LIMIT @limit
-					""";
-				command.Parameters.AddWithValue("@schema", baseSchemaName);
-				command.Parameters.AddWithValue("@startDay", startDay);
-				command.Parameters.AddWithValue("@endDay", endDay);
-				command.Parameters.AddWithValue("@limit", effectiveLimit);
-
+				command.CommandText = BuildHourlyFallbackSql(schemaFilter, groupType);
+				AddSchemaAndRangeParams(command, schemaParams, startDay, endDay, effectiveLimit, groupType);
 				return await ReadHourlyResultsAsync(command, queryName, ct).ConfigureAwait(false);
 			},
 			cancellationToken);
 	}
 
 	private Task<IReadOnlyList<DailyUsageDto>> GetDailyUsageFallbackAsync(
-		string baseSchemaName, string startDay, string endDay, int? limit, CancellationToken cancellationToken)
+		string[] schemaNames, string startDay, string endDay, int? limit,
+		CancellationToken cancellationToken, string? groupType = null)
 	{
 		var effectiveLimit = QueryLimits.Clamp(limit, QueryLimits.DefaultUsageLimit, QueryLimits.MaxDailyUsageRows);
-		var queryName = string.Concat("GetDailyUsage(Fallback:", baseSchemaName, ")");
+		var queryName = string.Concat("GetDailyUsage(Fallback:", string.Join('|', schemaNames), ")");
+		var (schemaFilter, schemaParams) = BuildSchemaFilter(schemaNames);
 
 		return SqliteRetryHelper.ExecuteWithRetryAsync<IReadOnlyList<DailyUsageDto>>(
 			_logger,
 			async ct =>
 			{
 				ct.ThrowIfCancellationRequested();
-
 				using var connection = _connectionFactory.CreateConnection();
 				using var command = connection.CreateCommand();
-				// Split activities at midnight boundaries using UNION ALL.
-				// First part: time from start to MIN(end, next-midnight).
-				// Second part: time from next-midnight to end (only for cross-midnight activities).
-				command.CommandText = """
-					WITH base AS (
-					    SELECT a.StartLocalTime, a.EndLocalTime,
-					           COALESCE(g.Name, a.Name, '(unknown)') AS DisplayName,
-					           g.Color, g.Key,
-					           DATE(a.StartLocalTime) AS StartDay
-					    FROM Ar_Activity a
-					    LEFT JOIN Ar_Group g ON a.GroupId = g.GroupId AND a.ReportId = g.ReportId
-					    WHERE a.ReportId IN (
-					        SELECT ReportId FROM Ar_Timeline
-					        WHERE SchemaName = @schema OR BaseSchemaName = @schema
-					    )
-					      AND a.EndLocalTime > @startDay
-					      AND a.StartLocalTime < @endDay
-					),
-					split AS (
-					    SELECT StartDay AS Day, DisplayName, Color, Key,
-					           (JULIANDAY(MIN(EndLocalTime, DATE(StartDay, '+1 day')))
-					            - JULIANDAY(StartLocalTime)) * 86400 AS Secs
-					    FROM base
-					    UNION ALL
-					    SELECT DATE(StartDay, '+1 day') AS Day, DisplayName, Color, Key,
-					           (JULIANDAY(EndLocalTime)
-					            - JULIANDAY(DATE(StartDay, '+1 day'))) * 86400 AS Secs
-					    FROM base
-					    WHERE EndLocalTime > DATE(StartDay, '+1 day')
-					)
-					SELECT Day, DisplayName, Color, Key, SUM(Secs) AS TotalSeconds
-					FROM split
-					WHERE Day >= @startDay AND Day < @endDay AND Secs > 0
-					GROUP BY Day, DisplayName, Color, Key
-					ORDER BY Day, TotalSeconds DESC
-					LIMIT @limit
-					""";
-				command.Parameters.AddWithValue("@schema", baseSchemaName);
-				command.Parameters.AddWithValue("@startDay", startDay);
-				command.Parameters.AddWithValue("@endDay", endDay);
-				command.Parameters.AddWithValue("@limit", effectiveLimit);
-
+				command.CommandText = BuildDailyFallbackSql(schemaFilter, groupType);
+				AddSchemaAndRangeParams(command, schemaParams, startDay, endDay, effectiveLimit, groupType);
 				return await ReadDailyResultsAsync(command, queryName, ct).ConfigureAwait(false);
 			},
 			cancellationToken);
@@ -332,56 +265,18 @@ public sealed class UsageRepository : IUsageRepository
 		string startDay, string endDay, int? limit, CancellationToken cancellationToken)
 	{
 		var effectiveLimit = QueryLimits.Clamp(limit, QueryLimits.DefaultUsageLimit, QueryLimits.MaxDailyUsageRows);
+		string[] schemaNames = ["ManicTime/Applications"];
+		var (schemaFilter, schemaParams) = BuildSchemaFilter(schemaNames);
 
 		return SqliteRetryHelper.ExecuteWithRetryAsync<IReadOnlyList<DayOfWeekUsageDto>>(
 			_logger,
 			async ct =>
 			{
 				ct.ThrowIfCancellationRequested();
-
 				using var connection = _connectionFactory.CreateConnection();
 				using var command = connection.CreateCommand();
-				// Split activities at midnight boundaries, then compute day-of-week from each segment's day.
-				command.CommandText = """
-					WITH base AS (
-					    SELECT a.StartLocalTime, a.EndLocalTime,
-					           COALESCE(g.Name, a.Name, '(unknown)') AS DisplayName,
-					           DATE(a.StartLocalTime) AS StartDay
-					    FROM Ar_Activity a
-					    LEFT JOIN Ar_Group g ON a.GroupId = g.GroupId AND a.ReportId = g.ReportId
-					    WHERE a.ReportId IN (
-					        SELECT ReportId FROM Ar_Timeline
-					        WHERE SchemaName = @schema OR BaseSchemaName = @schema
-					    )
-					      AND a.EndLocalTime > @startDay
-					      AND a.StartLocalTime < @endDay
-					),
-					split AS (
-					    SELECT StartDay AS Day, DisplayName,
-					           (JULIANDAY(MIN(EndLocalTime, DATE(StartDay, '+1 day')))
-					            - JULIANDAY(StartLocalTime)) * 86400 AS Secs
-					    FROM base
-					    UNION ALL
-					    SELECT DATE(StartDay, '+1 day') AS Day, DisplayName,
-					           (JULIANDAY(EndLocalTime)
-					            - JULIANDAY(DATE(StartDay, '+1 day'))) * 86400 AS Secs
-					    FROM base
-					    WHERE EndLocalTime > DATE(StartDay, '+1 day')
-					)
-					SELECT DisplayName,
-					       CAST(strftime('%w', Day) AS INTEGER) AS DayOfWeek,
-					       SUM(Secs) AS TotalSeconds
-					FROM split
-					WHERE Day >= @startDay AND Day < @endDay AND Secs > 0
-					GROUP BY DisplayName, DayOfWeek
-					ORDER BY DisplayName, DayOfWeek
-					LIMIT @limit
-					""";
-				command.Parameters.AddWithValue("@schema", "ManicTime/Applications");
-				command.Parameters.AddWithValue("@startDay", startDay);
-				command.Parameters.AddWithValue("@endDay", endDay);
-				command.Parameters.AddWithValue("@limit", effectiveLimit);
-
+				command.CommandText = BuildDayOfWeekFallbackSql(schemaFilter);
+				AddSchemaAndRangeParams(command, schemaParams, startDay, endDay, effectiveLimit);
 				return await ReadDayOfWeekResultsAsync(command, ct).ConfigureAwait(false);
 			},
 			cancellationToken);
@@ -422,6 +317,168 @@ public sealed class UsageRepository : IUsageRepository
 				return (IReadOnlyList<TimelineSummaryDto>)results.AsReadOnly();
 			},
 			cancellationToken);
+	}
+
+	// ── SQL template builders (keep SQL out of retry lambdas for method length) ──
+
+	private static string BuildHourlyFallbackSql(string schemaFilter, string? groupType = null)
+	{
+		var groupCondition = groupType is not null ? "\n\t\t      AND g.GroupType = @groupType" : "";
+		return $"""
+		WITH RECURSIVE
+		base AS (
+		    SELECT a.StartLocalTime, a.EndLocalTime,
+		           COALESCE(g.Name, a.Name, '(unknown)') AS DisplayName,
+		           g.Color, g.Key
+		    FROM Ar_Activity a
+		    LEFT JOIN Ar_Group g ON a.GroupId = g.GroupId AND a.ReportId = g.ReportId
+		    WHERE a.ReportId IN (
+		        SELECT ReportId FROM Ar_Timeline
+		        WHERE {schemaFilter}
+		    )
+		      AND a.EndLocalTime > @startDay
+		      AND a.StartLocalTime < @endDay{groupCondition}
+		),
+		hours AS (
+		    SELECT DisplayName, Color, Key,
+		           StartLocalTime AS SegStart,
+		           MIN(EndLocalTime,
+		               strftime('%Y-%m-%d %H:00:00', StartLocalTime, '+1 hour')) AS SegEnd,
+		           EndLocalTime
+		    FROM base
+		    UNION ALL
+		    SELECT DisplayName, Color, Key,
+		           SegEnd AS SegStart,
+		           MIN(EndLocalTime,
+		               strftime('%Y-%m-%d %H:00:00', SegEnd, '+1 hour')) AS SegEnd,
+		           EndLocalTime
+		    FROM hours
+		    WHERE SegEnd < EndLocalTime
+		)
+		SELECT DATE(SegStart) AS Day,
+		       CAST(strftime('%H', SegStart) AS INTEGER) AS Hour,
+		       DisplayName, Color, Key,
+		       SUM((JULIANDAY(SegEnd) - JULIANDAY(SegStart)) * 86400) AS TotalSeconds
+		FROM hours
+		WHERE DATE(SegStart) >= @startDay AND DATE(SegStart) < @endDay
+		GROUP BY Day, Hour, DisplayName, Color, Key
+		ORDER BY Day, Hour, TotalSeconds DESC
+		LIMIT @limit
+		""";
+	}
+
+	private static string BuildDailyFallbackSql(string schemaFilter, string? groupType = null)
+	{
+		var groupCondition = groupType is not null ? "\n\t\t      AND g.GroupType = @groupType" : "";
+		return $"""
+		WITH base AS (
+		    SELECT a.StartLocalTime, a.EndLocalTime,
+		           COALESCE(g.Name, a.Name, '(unknown)') AS DisplayName,
+		           g.Color, g.Key,
+		           DATE(a.StartLocalTime) AS StartDay
+		    FROM Ar_Activity a
+		    LEFT JOIN Ar_Group g ON a.GroupId = g.GroupId AND a.ReportId = g.ReportId
+		    WHERE a.ReportId IN (
+		        SELECT ReportId FROM Ar_Timeline
+		        WHERE {schemaFilter}
+		    )
+		      AND a.EndLocalTime > @startDay
+		      AND a.StartLocalTime < @endDay{groupCondition}
+		),
+		split AS (
+		    SELECT StartDay AS Day, DisplayName, Color, Key,
+		           (JULIANDAY(MIN(EndLocalTime, DATE(StartDay, '+1 day')))
+		            - JULIANDAY(StartLocalTime)) * 86400 AS Secs
+		    FROM base
+		    UNION ALL
+		    SELECT DATE(StartDay, '+1 day') AS Day, DisplayName, Color, Key,
+		           (JULIANDAY(EndLocalTime)
+		            - JULIANDAY(DATE(StartDay, '+1 day'))) * 86400 AS Secs
+		    FROM base
+		    WHERE EndLocalTime > DATE(StartDay, '+1 day')
+		)
+		SELECT Day, DisplayName, Color, Key, SUM(Secs) AS TotalSeconds
+		FROM split
+		WHERE Day >= @startDay AND Day < @endDay AND Secs > 0
+		GROUP BY Day, DisplayName, Color, Key
+		ORDER BY Day, TotalSeconds DESC
+		LIMIT @limit
+		""";
+	}
+
+	private static string BuildDayOfWeekFallbackSql(string schemaFilter) => $"""
+		WITH base AS (
+		    SELECT a.StartLocalTime, a.EndLocalTime,
+		           COALESCE(g.Name, a.Name, '(unknown)') AS DisplayName,
+		           DATE(a.StartLocalTime) AS StartDay
+		    FROM Ar_Activity a
+		    LEFT JOIN Ar_Group g ON a.GroupId = g.GroupId AND a.ReportId = g.ReportId
+		    WHERE a.ReportId IN (
+		        SELECT ReportId FROM Ar_Timeline
+		        WHERE {schemaFilter}
+		    )
+		      AND a.EndLocalTime > @startDay
+		      AND a.StartLocalTime < @endDay
+		),
+		split AS (
+		    SELECT StartDay AS Day, DisplayName,
+		           (JULIANDAY(MIN(EndLocalTime, DATE(StartDay, '+1 day')))
+		            - JULIANDAY(StartLocalTime)) * 86400 AS Secs
+		    FROM base
+		    UNION ALL
+		    SELECT DATE(StartDay, '+1 day') AS Day, DisplayName,
+		           (JULIANDAY(EndLocalTime)
+		            - JULIANDAY(DATE(StartDay, '+1 day'))) * 86400 AS Secs
+		    FROM base
+		    WHERE EndLocalTime > DATE(StartDay, '+1 day')
+		)
+		SELECT DisplayName,
+		       CAST(strftime('%w', Day) AS INTEGER) AS DayOfWeek,
+		       SUM(Secs) AS TotalSeconds
+		FROM split
+		WHERE Day >= @startDay AND Day < @endDay AND Secs > 0
+		GROUP BY DisplayName, DayOfWeek
+		ORDER BY DisplayName, DayOfWeek
+		LIMIT @limit
+		""";
+
+	private static void AddSchemaAndRangeParams(
+		Microsoft.Data.Sqlite.SqliteCommand command,
+		(string Name, string Value)[] schemaParams,
+		string startDay, string endDay, int effectiveLimit,
+		string? groupType = null)
+	{
+		foreach (var (name, value) in schemaParams)
+		{
+			command.Parameters.AddWithValue(name, value);
+		}
+		command.Parameters.AddWithValue("@startDay", startDay);
+		command.Parameters.AddWithValue("@endDay", endDay);
+		command.Parameters.AddWithValue("@limit", effectiveLimit);
+		if (groupType is not null)
+		{
+			command.Parameters.AddWithValue("@groupType", groupType);
+		}
+	}
+
+	/// <summary>
+	/// Builds a parameterized SQL filter clause for matching multiple schema names.
+	/// Returns a WHERE fragment like "(SchemaName = @s0 OR SchemaName = @s1 OR BaseSchemaName = @s0 OR BaseSchemaName = @s1)"
+	/// and the associated parameter name/value pairs.
+	/// </summary>
+	private static (string Filter, (string Name, string Value)[] Params) BuildSchemaFilter(string[] schemaNames)
+	{
+		var conditions = new string[schemaNames.Length * 2];
+		var parameters = new (string Name, string Value)[schemaNames.Length];
+		for (var i = 0; i < schemaNames.Length; i++)
+		{
+			var paramName = $"@s{i}";
+			conditions[i] = $"SchemaName = {paramName}";
+			conditions[schemaNames.Length + i] = $"BaseSchemaName = {paramName}";
+			parameters[i] = (paramName, schemaNames[i]);
+		}
+
+		return ($"({string.Join(" OR ", conditions)})", parameters);
 	}
 
 	private async Task<IReadOnlyList<DayOfWeekUsageDto>> ReadDayOfWeekResultsAsync(

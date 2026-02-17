@@ -41,7 +41,7 @@ public static class SchemaManifest
 
 		tables["Ar_Group"] = new(
 			"Ar_Group",
-			["GroupId", "ReportId", "Name", "Color", "Key", "CommonId"],
+			["GroupId", "ReportId", "Name", "Color", "Key", "CommonId", "GroupType"],
 			TableTier.Core);
 	}
 
