@@ -77,6 +77,46 @@ public sealed class ScreenshotFilenameParserTests
 		result.Should().NotBeNull();
 	}
 
+
+[TestMethod]
+public void TryParse_UnsignedPositiveOffset_ParsedAndNormalized()
+{
+// ManicTime on UTC+ systems (e.g. de-CH, UTC+1) writes offsets without
+// the leading '+' sign: "01-00" instead of "+01-00".
+var result = ScreenshotFilenameParser.TryParse(
+"2026-02-27_06-14-44_01-00_3866_2330_517204_1.jpg");
+
+result.Should().NotBeNull();
+result!.Date.Should().Be(new DateOnly(2026, 2, 27));
+result.Time.Should().Be(new TimeOnly(6, 14, 44));
+result.Offset.Should().Be("+01-00");
+result.Width.Should().Be(3866);
+result.Height.Should().Be(2330);
+result.Sequence.Should().Be(517204);
+result.Monitor.Should().Be(1);
+result.IsThumbnail.Should().BeFalse();
+}
+
+[TestMethod]
+public void TryParse_UnsignedPositiveOffset_Thumbnail_ParsedCorrectly()
+{
+var result = ScreenshotFilenameParser.TryParse(
+"2026-02-27_06-14-44_01-00_3866_2330_517204_1.thumbnail.jpg");
+
+result.Should().NotBeNull();
+result!.Offset.Should().Be("+01-00");
+result.IsThumbnail.Should().BeTrue();
+}
+
+[TestMethod]
+public void TryParse_UnsignedZeroOffset_ParsedAndNormalized()
+{
+var result = ScreenshotFilenameParser.TryParse(
+"2025-07-01_12-00-00_00-00_1920_1080_0_0.jpg");
+
+result.Should().NotBeNull();
+result!.Offset.Should().Be("+00-00");
+}
 	#endregion
 
 	#region Invalid filenames
