@@ -22,23 +22,26 @@
 - Layered design with explicit boundaries:
   - `Configuration`
   - `Data`
-  - `Tools`/`Resources`/`Prompts` adapters
+  - `Application` orchestration / query shaping
+  - Repl command graph
+  - MCP exposure via `Repl.Mcp`
   - `Models`
 - Dependency direction: outer layers depend on inner contracts only.
-- No direct SQL or filesystem logic inside MCP tool classes.
-- Keep domain/service logic testable without MCP host runtime.
+- No direct SQL or filesystem logic inside Repl command handlers.
+- Keep domain/service logic testable without Repl or MCP runtime.
 - Separate concerns with clear ownership and references using namespaces + folder boundaries at minimum.
 - Multi-project decomposition is optional; adopt it only when complexity or packaging concerns justify it.
 - Test organization must mirror architecture boundaries (either by dedicated test projects or by namespace/folder-aligned suites in a shared test project).
+- Repl contexts are the mandatory organization model for the public command surface. Flat command registries should not be used for feature areas that have a natural hierarchy.
 
 ### Optional multi-project decomposition
 
-- `ManicTimeMcp.Host` (MCP host wiring, DI composition)
+- `ManicTimeMcp.Host` (Repl bootstrap, DI composition, hybrid startup)
 - `ManicTimeMcp.Configuration` (settings discovery and health bootstrap)
 - `ManicTimeMcp.Data` (SQLite and screenshot data access)
 - `ManicTimeMcp.Contracts` (DTOs, schemas, shared contracts)
 - `ManicTimeMcp.Application` (orchestration/services)
-- `ManicTimeMcp.Transport.Mcp` (tools/resources/prompts adapters)
+- `ManicTimeMcp.Transport.Repl` (contexts, routes, option groups, prompts/resources mapping)
 
 If using the multi-project option, each project should have matching tests:
 
@@ -55,6 +58,7 @@ If using the multi-project option, each project should have matching tests:
 - Use shared build configuration in `Directory.Build.props`.
 - All repeated project properties must be centralized in `Directory.Build.props` (for example nullability, analyzers, language version, deterministic build flags).
 - Minimize third-party dependencies; each dependency requires explicit justification.
+- For this redesign, `Repl`, `Repl.Mcp`, and `Repl.Testing` are approved first-class dependencies and should be versioned centrally.
 
 ## .NET and C# Standards
 
@@ -70,6 +74,8 @@ If using the multi-project option, each project should have matching tests:
   - no public setters unless explicitly justified
   - `readonly` fields and types where practical
   - functional-style transformations for pure logic
+- Prefer Repl temporal range types over raw string date windows at the command boundary when the command semantics are range-based.
+- Prefer `[ReplOptionsGroup]` for repeated command parameters shared across multiple routes.
 
 ## Performance-Oriented Coding Standards
 
@@ -100,6 +106,8 @@ If using the multi-project option, each project should have matching tests:
 - Keep invariants and assumptions documented close to code.
 - Favor composition over inheritance for behavior reuse.
 - Keep side effects at edges and keep core logic pure where possible.
+- Repl route handlers should remain thin adapters over application services.
+- Prompt-answer flows must prefer Repl answer-prefill semantics over bespoke transport-specific prompting contracts.
 
 ## Error Handling Standards
 
@@ -138,6 +146,7 @@ This workstream is independent and can be applied before implementation starts. 
 - Architecture tests (dependency direction and forbidden references).
 - Analyzer compliance checks in CI.
 - Code review checklist enforcement for performance and maintainability rules.
+- Repl command-surface tests are required and must exercise contexts, option groups, temporal range binding, and multi-step session behavior.
 
 ## Risks and Mitigations
 

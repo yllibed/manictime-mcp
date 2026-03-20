@@ -2,14 +2,14 @@
 
 ## Objectives
 
-- Define stable MCP-facing contracts.
+- Define stable Repl-first command contracts that are exposed through MCP.
 - Keep output compact, structured, and model-friendly.
 - Ensure behavior remains deterministic across clients.
 - Minimize round-trips and cross-tool lookups by returning resolved, ready-to-present data.
 
 ## Scope
 
-- Tool signatures, parameter rules, and output schemas.
+- Repl route hierarchy, parameter rules, and output schemas.
 - Resource URIs and payload contracts.
 - Prompt contracts that orchestrate tool usage.
 
@@ -63,6 +63,21 @@
 
 ## Technical Design
 
+### Repl-first command model
+
+- The public application surface is a Repl command graph; MCP primitives are derived from that graph through `Repl.Mcp`.
+- Commands must be grouped in meaningful contexts. Required top-level contexts:
+  - `timeline`
+  - `activity`
+  - `usage`
+  - `summary`
+  - `screenshot`
+  - `resource`
+  - `prompt`
+- Route hierarchy is the source of truth for local CLI help, interactive use, documentation export, and MCP discovery.
+- Flattened MCP names may change as a byproduct of route hierarchy, but the route hierarchy itself must remain stable and documented.
+- Use `Repl.Mcp` with `stdio` transport only for v1 and `ResourceUriScheme = "manictime"`.
+
 ### Contract principles
 
 - Explicit `outputSchema` for tools with structured payloads.
@@ -88,6 +103,27 @@
   - avoid requiring user-visible ID cross-references to interpret output
 - While the specification is still evolving, backward compatibility with older MCP contracts is not a requirement. Contract changes must remain explicit and documented.
 
+### Repl parameter model
+
+- Prefer Repl temporal range types over ad hoc `startDate`/`endDate` string pairs when the command semantics are inherently range-based:
+  - `ReplDateRange` for date-based usage and summary windows
+  - `ReplDateTimeRange` for screenshot and point-in-time investigative windows
+  - `ReplDateTimeOffsetRange` only when offset-preserving semantics are materially required
+- Keep ISO-8601 semantics, but express them through Repl range parsing rather than bespoke string parsing where practical.
+- Reusable query knobs must be factored into `[ReplOptionsGroup]` types when shared across multiple commands, especially:
+  - pagination / limits
+  - summary/detail flags
+  - screenshot crop coordinates and units
+  - screenshot save options
+- Commands that need guided answers or confirmations must support Repl answer-prefill via `--answer:*`, which maps to MCP `answer.*` arguments.
+- Commands should use Repl annotations where applicable:
+  - `.ReadOnly()` for safe autonomous reads
+  - `.Destructive()` for write or deletion semantics
+  - `.Idempotent()` for safe retries
+  - `.OpenWorld()` when interacting with the filesystem or external systems beyond in-memory command dispatch
+  - `.AutomationHidden()` for interactive-only helpers
+  - `.WithDetails(...)` for richer agent-facing guidance when the short description is insufficient
+
 ### Prompt principles
 
 - Prompts should call summary tools first.
@@ -101,14 +137,40 @@
 
 ## New Tools
 
+Preferred Repl route hierarchy:
+
+- `timeline list`
+- `activity list`
+- `activity tags`
+- `usage applications`
+- `usage documents`
+- `usage websites`
+- `summary daily`
+- `summary narrative`
+- `summary period`
+- `screenshot list`
+- `screenshot get`
+- `screenshot crop`
+- `screenshot save`
+- `resource config`
+- `resource timelines`
+- `resource health`
+- `resource guide`
+- `resource environment`
+- `resource data-range`
+- `prompt daily-review`
+- `prompt weekly-review`
+- `prompt screenshot-investigation`
+
 ### `get_activity_narrative`
 
 Flagship tool for answering "what did I do?" in a single call. Returns a pre-structured narrative with aggregates and segments, eliminating multi-round-trip patterns.
 
+Preferred Repl command: `summary narrative`
+
 ```
 Parameters:
-  startDate: string (ISO-8601 date, inclusive)
-  endDate: string (ISO-8601 date, exclusive)
+  period: ReplDateRange (inclusive start, exclusive end semantics)
   includeWebsites: bool (default true)
   minDurationMinutes: number (default 0, filters short segments)
   maxGapMinutes: number (default 2.0, merges same-app segments within this gap)
@@ -161,10 +223,11 @@ Hard caps: default 200 segments (configurable via `maxSegments`, max 2000), max 
 
 Multi-day aggregation for weekly/monthly overviews.
 
+Preferred Repl command: `summary period`
+
 ```
 Parameters:
-  startDate: string (ISO-8601 date, inclusive)
-  endDate: string (ISO-8601 date, exclusive, max 31 days from startDate)
+  period: ReplDateRange (inclusive start, exclusive end semantics, max 31 days)
 
 Response: {
   days: [{
@@ -208,10 +271,11 @@ Hard caps: max 31 days, max 50 top apps, max 50 top websites.
 
 Exposes web tracking data from `Ar_WebSiteByDay`.
 
+Preferred Repl command: `usage websites`
+
 ```
 Parameters:
-  startDate: string (ISO-8601 date, inclusive)
-  endDate: string (ISO-8601 date, exclusive, max 31 days from startDate)
+  period: ReplDateRange (inclusive start, exclusive end semantics, max 31 days)
   limit: number (default 50, max 200)
   minMinutes: number (default 0.5, filters brief visits; set 0 to include all)
 
@@ -246,14 +310,15 @@ Hard caps: max 31-day window, max 200 websites. Maximum breakdown entries per we
 
 Metadata-only screenshot listing. Zero image bytes. See WS-05 for full design.
 
+Preferred Repl command: `screenshot list`
+
 ```
 Parameters:
-  startDate: string (ISO-8601 date or datetime, inclusive; date-only expands to local T00:00:00)
-  endDate: string (ISO-8601 date or datetime, exclusive; date-only expands to local T00:00:00)
+  window: ReplDateTimeRange (inclusive start, exclusive end)
   maxCount: number (default 20, max 100)
   samplingStrategy: string (default "activity_transition", also "interval")
 
-Response: TextContentBlock (metadata) + ResourceLinkBlock[] (lazy-fetch URIs; each block's required `Name` uses the display-local timestamp, e.g. `"Screenshot 2025-01-15 10:30:45"`)
+Response: structured JSON metadata; lazy-fetch resource URIs may be included when transport-compatible
   {
     screenshots: [{
       screenshotRef: string,
@@ -288,22 +353,22 @@ Notes:
 
 Single image retrieval with dual-audience delivery. See WS-05 for full design.
 
+Preferred Repl command: `screenshot get`
+
 ```
 Parameters:
   screenshotRef: string (opaque reference returned by list_screenshots; stable for the MCP session)
 
-Response: ImageContentBlock[] (dual-audience) + TextContentBlock (metadata)
+Response: structured JSON including resolved metadata plus image payload in the transport-compatible representation chosen by the runtime
 ```
 
-Returns two `ImageContentBlock` entries using the dual-audience pattern:
-- **Model-facing thumbnail**: `Audience = [Role.User, Role.Assistant]`. Low-resolution `.thumbnail` variant. The model sees this and can reason about it (e.g. to identify regions of interest for cropping). Token cost is driven by pixel resolution, not encoding — a small thumbnail costs relatively few vision tokens.
-- **Human-facing full image**: `Audience = [Role.User]`. Full-resolution image rendered by the MCP client for the human. Excluded from LLM context. Zero LLM token cost. May alternatively be a `ResourceLinkBlock` for lazy fetch.
-
-When no `.thumbnail` variant exists, a single full-size `ImageContentBlock` with `Audience = [Role.User, Role.Assistant]` is returned.
+Thumbnail-first retrieval remains the default when available to control payload size. Full-size retrieval remains available when required by crop or save operations.
 
 ### `crop_screenshot`
 
 Region-of-interest extraction using percentage-first coordinates. Designed for model-driven workflows: the model inspects the thumbnail from `get_screenshot`, identifies a region of interest, then requests a full-resolution crop. See WS-05 and ADR-0004.
+
+Preferred Repl command: `screenshot crop`
 
 ```
 Parameters:
@@ -314,16 +379,16 @@ Parameters:
   height: number (in selected units)
   coordinateUnits: string (default "percent", also "normalized")
 
-Response: ImageContentBlock (cropped image) + TextContentBlock (metadata)
+Response: structured JSON containing cropped-image metadata and payload
 ```
 
 Always reads the full-size image for final crop extraction. Percentage and normalized coordinates are resolution-independent (same proportional region regardless of thumbnail vs. full-size viewing context), so no separate `coordinateSpace` parameter is needed. The server resolves proportional coordinates into full-image pixels. Out-of-range or partially out-of-bounds ROI inputs are clamped to valid image bounds.
 
-Annotations: `Audience = [Role.User, Role.Assistant]` on the `ImageContentBlock` — the model receives the cropped region to analyze the detail, and the MCP client renders it for the human.
-
 ### `save_screenshot`
 
 Saves a screenshot to the filesystem within an MCP client-declared root directory. This is the first write operation in the server. See ADR-0007.
+
+Preferred Repl command: `screenshot save`
 
 ```
 Parameters:
@@ -348,9 +413,9 @@ The tool reads the full-size screenshot, applies optional crop, then writes to t
 
 ---
 
-## Updated Tools
+## Updated Commands
 
-### `get_activities`
+### `activity list`
 
 Add `includeGroupDetails` parameter (default `true`). JOIN `Ar_Group` and `Ar_CommonGroup` to return enriched fields inline:
 
@@ -361,11 +426,11 @@ Add `includeGroupDetails` parameter (default `true`). JOIN `Ar_Group` and `Ar_Co
 
 This removes a follow-up lookup in the common path.
 
-### `get_daily_summary`
+### `summary daily`
 
 Replace bare activity/usage counts with narrative output. Internally delegates to `get_activity_narrative` logic to produce structured segments and aggregates. Accepts `maxSegments` parameter (default 200, max 2000) to control segment truncation.
 
-### `get_application_usage` / `get_document_usage`
+### `usage applications` / `usage documents`
 
 Use pre-aggregated tables (`Ar_ApplicationByDay` / `Ar_DocumentByDay`) as the default and primary path, joined to `Ar_CommonGroup`, with automatic fallback to raw-activity computation if supplemental tables are absent.
 
@@ -389,7 +454,7 @@ Content includes:
   - screenshot investigation
   - "why no screenshots" diagnostics
 - Data model explanation: schemas, groups, `CommonGroup`, pre-aggregated tables.
-- Screenshot workflow: `list_screenshots` -> `get_screenshot` (dual-audience: model sees thumbnail, human sees full image) -> `crop_screenshot` (model-driven ROI selection from thumbnail inspection).
+- Screenshot workflow: `screenshot list` -> `screenshot get` -> `screenshot crop` -> `screenshot save`.
 - Common questions -> tool mapping table.
 - Interpretation tips (for example how `Color` and `Key` should be interpreted).
 - Communication guidance: prefer resolved user-facing labels in responses; keep internal refs for tool chaining only.
@@ -400,9 +465,9 @@ Content includes:
 
 ### `manictime://screenshot/{screenshotRef}`
 
-Lazy-fetch screenshot resource. Clients resolve this URI via `resources/read` to retrieve the image on demand. The URI is keyed by `screenshotRef` (opaque, session-stable) rather than timestamp, making each resource deterministically addressable even when multiple screenshots share the same timestamp.
+Lazy-fetch screenshot resource. Clients resolve this URI via `resources/read` to retrieve screenshot data on demand. The URI is keyed by `screenshotRef` (opaque, session-stable) rather than timestamp, making each resource deterministically addressable even when multiple screenshots share the same timestamp.
 
-- Returns: `ImageContentBlock` with the screenshot (thumbnail by default) + `TextContentBlock` (resolved metadata).
+- Returns transport-compatible screenshot data plus structured metadata.
 - `{screenshotRef}` is the opaque reference returned by `list_screenshots`. Each screenshot file maps to exactly one `screenshotRef`, so there is no collision ambiguity.
 - Discovery: `list_screenshots` is the canonical way to obtain valid `screenshotRef` values and their corresponding `resourceUri` fields. Direct construction of `screenshotRef` values by clients is not supported.
 - Annotations: `Audience = [Role.User]`.
@@ -440,12 +505,12 @@ Arguments:
   date: string (ISO-8601 date, required)
 
 Prompt text:
-  "Use get_activity_narrative with startDate={date}, endDate={date+1},
-   and includeSummary=true to retrieve activity data with top-app/
+  "Use summary narrative with the date-derived range and includeSummary=true
+   to retrieve activity data with top-app/
    top-website aggregates. Synthesize a concise daily summary highlighting
    top applications, total active time, and notable patterns. Prefer
-   resolved names/colors over internal refs. If suggestedScreenshots are
-   present, use get_screenshot + crop_screenshot + save_screenshot to
+   resolved names/colors over internal refs. If suggested screenshots are
+   present, use screenshot get + screenshot crop + screenshot save to
    persist the best crops to project assets."
 ```
 
@@ -459,12 +524,12 @@ Arguments:
   endDate: string (ISO-8601 date, required)
 
 Prompt text:
-  "Use get_period_summary with the provided date range to retrieve
+  "Use summary period with the provided date range to retrieve
    multi-day activity data. Synthesize a weekly overview including
    busiest/quietest days, top applications and websites, day-of-week
    patterns, and total active hours. Prefer resolved labels in the
-   final user-facing answer. For notable days, use get_daily_summary +
-   get_screenshot + crop_screenshot + save_screenshot for visual context."
+   final user-facing answer. For notable days, use summary daily +
+   screenshot get + screenshot crop + screenshot save for visual context."
 ```
 
 ### `screenshot_investigation`
@@ -476,13 +541,12 @@ Arguments:
   datetime: string (ISO-8601 datetime, required)
 
 Prompt text:
-  "Use list_screenshots to find screenshots near {datetime} (within a
-   5-minute window). Use get_screenshot to retrieve the most relevant
-   screenshot — you will receive a low-resolution thumbnail you can
-   inspect. If you spot a region that needs more detail, call
-   crop_screenshot with percentage ROI coordinates to get a
+  "Use screenshot list to find screenshots near {datetime} (within a
+   5-minute window). Use screenshot get to retrieve the most relevant
+   screenshot. If you spot a region that needs more detail, call
+   screenshot crop with percentage ROI coordinates to get a
    full-resolution crop you can analyze. Combine visual findings with
-   get_activity_narrative for the same period, then produce a
+   summary narrative for the same period, then produce a
    user-facing explanation using resolved names rather than internal
    refs."
 ```
@@ -529,5 +593,5 @@ This workstream can be delivered independently once method-level service interfa
 - Contract tests passing.
 - Contract examples published in README/docs.
 - Narrative and summary tools operational end-to-end.
-- Progressive screenshot workflow operational.
+- Progressive screenshot and save workflow operational.
 - Model guide resource implemented with multi-tool playbooks.

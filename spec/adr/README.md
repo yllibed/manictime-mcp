@@ -28,6 +28,10 @@ Architecture Decision Records (ADRs) capture significant, durable decisions.
 | [0003](0003-screenshot-content-block-strategy.md) | Screenshot Content Block Strategy | Accepted |
 | [0004](0004-image-crop-dependency.md) | Image Crop Dependency (SkiaSharp) | Accepted |
 | [0005](0005-pre-aggregated-tables.md) | Pre-aggregated Tables as Primary Query Path | Accepted |
+| [0006](0006-payload-efficiency-contract-changes.md) | Payload Efficiency Contract Changes | Accepted |
+| [0007](0007-defect-fixes-and-save-screenshot.md) | Defect Fixes and save_screenshot Tool | Accepted |
+| [0008](0008-repl-first-command-graph-and-mcp-integration.md) | Repl-First Command Graph and MCP Integration | Accepted |
+| [0009](0009-temporal-ranges-and-reusable-option-groups.md) | Temporal Ranges and Reusable Option Groups | Accepted |
 
 ## Initial ADR Candidates
 
