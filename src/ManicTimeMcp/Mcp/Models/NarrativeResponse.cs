@@ -1,6 +1,6 @@
 namespace ManicTimeMcp.Mcp.Models;
 
-/// <summary>Response for the get_activity_narrative tool.</summary>
+/// <summary>Response for the summary narrative workflow.</summary>
 internal sealed class NarrativeResponse
 {
 	/// <summary>Start date.</summary>

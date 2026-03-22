@@ -185,7 +185,6 @@ internal static class ManicTimeReplHandlers
 				screenshot.Height,
 				screenshot.Monitor,
 				screenshot.IsThumbnail,
-				resourceUri = $"manictime://screenshot/{screenshot.Ref}",
 			}),
 			sampling = selection.SamplingStrategyUsed.ToString().ToLowerInvariant(),
 			truncation = new

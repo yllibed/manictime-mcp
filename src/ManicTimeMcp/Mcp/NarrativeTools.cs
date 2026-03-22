@@ -67,7 +67,7 @@ public sealed class NarrativeTools
 		}
 		catch (SqliteException ex)
 		{
-			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://health resource to diagnose the issue.");
+			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://resource/health resource to diagnose the issue.");
 		}
 		catch (InvalidOperationException ex)
 		{
@@ -98,7 +98,7 @@ public sealed class NarrativeTools
 		}
 		catch (SqliteException ex)
 		{
-			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://health resource to diagnose the issue.");
+			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://resource/health resource to diagnose the issue.");
 		}
 		catch (InvalidOperationException ex)
 		{
@@ -130,7 +130,7 @@ public sealed class NarrativeTools
 		}
 		catch (SqliteException ex)
 		{
-			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://health resource to diagnose the issue.");
+			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://resource/health resource to diagnose the issue.");
 		}
 		catch (InvalidOperationException ex)
 		{
@@ -165,7 +165,7 @@ public sealed class NarrativeTools
 		}
 		catch (SqliteException ex)
 		{
-			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://health resource to diagnose the issue.");
+			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://resource/health resource to diagnose the issue.");
 		}
 		catch (InvalidOperationException ex)
 		{

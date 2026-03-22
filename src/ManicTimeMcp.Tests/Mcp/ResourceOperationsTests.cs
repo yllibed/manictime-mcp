@@ -73,4 +73,19 @@ public sealed class ResourceOperationsTests
 		result.Should().NotBeNull();
 		result!["timelineSummaries"]!.AsArray().Count.Should().Be(1);
 	}
+
+	[TestMethod]
+	public void GetGuide_UsesReplFirstCommandsAndResourceUris()
+	{
+		var guide = ManicTimeResources.GetGuide();
+
+		guide.Should().Contain("timeline list");
+		guide.Should().Contain("summary narrative");
+		guide.Should().Contain("screenshot save");
+		guide.Should().Contain("manictime://resource/health");
+		guide.Should().Contain("manictime://resource/data-range");
+		guide.Should().NotContain("get_timelines");
+		guide.Should().NotContain("manictime://health");
+		guide.Should().NotContain("manictime://screenshot/");
+	}
 }

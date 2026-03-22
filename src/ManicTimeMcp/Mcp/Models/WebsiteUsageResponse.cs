@@ -1,6 +1,6 @@
 namespace ManicTimeMcp.Mcp.Models;
 
-/// <summary>Response for the get_website_usage tool.</summary>
+/// <summary>Response for the usage websites workflow.</summary>
 internal sealed class WebsiteUsageResponse
 {
 	/// <summary>Breakdown granularity: "hour" or "day".</summary>

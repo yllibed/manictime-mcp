@@ -97,38 +97,49 @@ For any MCP-compatible client that accepts a JSON config:
 
 ## What it provides
 
-### Tools
+The same app exposes three aligned surfaces:
 
-| Tool | Description |
-|------|-------------|
-| `get_daily_summary` | Structured summary for a single day — segments, top apps, websites, screenshots |
-| `get_activity_narrative` | "What did I do?" for a date range — segments with documents, websites, tags |
-| `get_period_summary` | Multi-day overview with per-day breakdown and day-of-week patterns |
-| `get_website_usage` | Website usage with hourly or daily breakdown |
-| `get_timelines` | List available ManicTime timelines |
-| `get_activities` | Raw activities from a specific timeline |
-| `list_screenshots` | Discover screenshots with metadata (zero image bytes) |
-| `get_screenshot` | Retrieve a screenshot — thumbnail for model, full-size for human |
-| `crop_screenshot` | Crop a region of interest from a screenshot |
-| `save_screenshot` | Save a screenshot to disk within MCP client roots |
+- `MCP`: flattened tool and prompt names such as `timeline_list`, `summary_daily`, and `prompt_daily-review`.
+- `CLI`: direct commands such as `timeline list --output:json`.
+- `REPL`: the same hierarchical command graph with interactive help and prompts.
+
+### Commands and MCP tools
+
+| Repl / CLI command | MCP tool | Description |
+|------|------|-------------|
+| `timeline list` | `timeline_list` | List available ManicTime timelines |
+| `activity list` | `activity_list` | Raw activities from a specific timeline |
+| `activity computer-usage` | `activity_computer-usage` | Computer on/off/idle/locked activities |
+| `activity tags` | `activity_tags` | User-defined tags and labels |
+| `usage applications` | `usage_applications` | Application usage for a date range |
+| `usage documents` | `usage_documents` | Document usage for a date range |
+| `usage websites` | `usage_websites` | Website usage with hourly or daily breakdown |
+| `summary daily` | `summary_daily` | Structured summary for a single day |
+| `summary narrative` | `summary_narrative` | "What did I do?" narrative for a date range |
+| `summary period` | `summary_period` | Multi-day overview with patterns and breakdowns |
+| `screenshot list` | `screenshot_list` | Discover screenshots with metadata only |
+| `screenshot get` | `screenshot_get` | Retrieve a screenshot payload |
+| `screenshot crop` | `screenshot_crop` | Crop a region of interest from a screenshot |
+| `screenshot save` | `screenshot_save` | Save a screenshot to disk within MCP client roots |
 
 ### Resources
 
-| Resource | Description |
-|----------|-------------|
-| `manictime://health` | Server health and database status |
-| `manictime://guide` | Usage guide for AI models — tool workflows, decision trees, playbooks |
-| `manictime://environment` | Device and OS information |
-| `manictime://data-range` | Available data date boundaries |
-| `manictime://screenshot/{ref}` | Lazy-fetch screenshot by reference |
+| Resource URI | Repl / CLI command | Description |
+|----------|------|-------------|
+| `manictime://resource/config` | `resource config` | Active ManicTime configuration and resolved data directory |
+| `manictime://resource/timelines` | `resource timelines` | Available timelines as a resource payload |
+| `manictime://resource/health` | `resource health` | Server health and database status |
+| `manictime://resource/guide` | `resource guide` | Repl-first usage guide for AI models and operators |
+| `manictime://resource/environment` | `resource environment` | Device and OS information |
+| `manictime://resource/data-range` | `resource data-range` | Available data date boundaries |
 
 ### Prompts
 
-| Prompt | Description |
-|--------|-------------|
-| `daily_review` | "Summarize my activities for {date}" |
-| `weekly_review` | "Summarize my week from {startDate} to {endDate}" |
-| `screenshot_investigation` | "What was I doing at {datetime}?" |
+| Repl / CLI prompt | MCP prompt | Description |
+|--------|------|-------------|
+| `prompt daily-review` | `prompt_daily-review` | "Summarize my activities for {date}" |
+| `prompt weekly-review` | `prompt_weekly-review` | "Summarize my week for {period}" |
+| `prompt screenshot-investigation` | `prompt_screenshot-investigation` | "What was I doing during {window}?" |
 
 ## Supported scope
 

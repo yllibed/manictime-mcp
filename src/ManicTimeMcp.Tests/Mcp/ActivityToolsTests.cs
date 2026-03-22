@@ -1,3 +1,4 @@
+using System.Reflection;
 using AwesomeAssertions;
 using ManicTimeMcp.Database;
 using ManicTimeMcp.Database.Dto;
@@ -60,6 +61,20 @@ public sealed class ActivityToolsTests
 
 		result.IsError.Should().BeTrue();
 		result.Payload.Should().Contain("Invalid date format");
+	}
+
+	[TestMethod]
+	public void GetActivitiesAsync_DescriptionMetadata_ReferencesTimelineList()
+	{
+		var method = typeof(ActivityTools).GetMethod(nameof(ActivityTools.GetActivitiesAsync));
+
+		method.Should().NotBeNull();
+		method!.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>()!.Description.Should().Contain("timeline list");
+		method.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>()!.Description.Should().NotContain("get_timelines");
+
+		var timelineParameter = method.GetParameters().Single(parameter => string.Equals(parameter.Name, "timelineId", StringComparison.Ordinal));
+		timelineParameter.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>()!.Description.Should().Contain("timeline list");
+		timelineParameter.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>()!.Description.Should().NotContain("get_timelines");
 	}
 
 	[TestMethod]

@@ -180,6 +180,38 @@ public sealed class ManicTimeReplFeatureTests
 		}
 	}
 
+	[TestMethod]
+	public async Task ScreenshotList_OmitsBrokenScreenshotResourceUri()
+	{
+		var app = CreateApp(services =>
+		{
+			services.AddSingleton<IScreenshotRegistry, ScreenshotRegistry>();
+			services.AddSingleton<IScreenshotService>(new StubScreenshotService(
+				new ScreenshotSelection
+				{
+					Screenshots = [SampleScreenshot],
+					TotalMatching = 1,
+					IsTruncated = false,
+					SamplingStrategyUsed = SamplingStrategy.Interval,
+				}));
+		});
+
+		await using var harness = await ReplMcpTestHarness.CreateAsync(() => app).ConfigureAwait(false);
+
+		var result = await harness.Client.CallToolAsync(
+			"screenshot_list",
+			new Dictionary<string, object?>(StringComparer.Ordinal)
+			{
+				["window"] = "2025-01-15T10:00:00..2025-01-15T11:00:00",
+			}).ConfigureAwait(false);
+
+		result.IsError.Should().NotBeTrue();
+
+		var doc = ParseSingleTextPayload(result);
+		var screenshot = doc.RootElement.GetProperty("screenshots")[0];
+		screenshot.TryGetProperty("resourceUri", out _).Should().BeFalse();
+	}
+
 	private static ReplApp CreateApp(Action<IServiceCollection>? configureServices = null) =>
 		ManicTimeReplApp.Create(configureServices);
 

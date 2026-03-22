@@ -1,6 +1,6 @@
 namespace ManicTimeMcp.Mcp.Models;
 
-/// <summary>Response for the get_period_summary tool.</summary>
+/// <summary>Response for the summary period workflow.</summary>
 internal sealed class PeriodSummaryResponse
 {
 	/// <summary>Per-day breakdown.</summary>

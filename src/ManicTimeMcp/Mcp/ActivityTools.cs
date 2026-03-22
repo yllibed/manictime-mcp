@@ -30,9 +30,9 @@ public sealed class ActivityTools
 	}
 
 	/// <summary>Returns activities for a specific timeline within a date range.</summary>
-	[Description("Get activities for a specific timeline within a date range. Use get_timelines first to find valid timeline IDs.")]
+	[Description("Get activities for a specific timeline within a date range. Use timeline list first to find valid timeline IDs.")]
 	public async Task<ToolInvocationResult> GetActivitiesAsync(
-		[Description("Timeline ID (from get_timelines)")] long timelineId,
+		[Description("Timeline ID (from timeline list)")] long timelineId,
 		[Description("Start date (ISO-8601, e.g. 2025-01-15)")] string startDate,
 		[Description("End date (ISO-8601, e.g. 2025-01-16)")] string endDate,
 		[Description("Maximum number of results (default 1000, max 5000)")] int? limit = null,
@@ -76,7 +76,7 @@ public sealed class ActivityTools
 		}
 		catch (SqliteException ex)
 		{
-			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://health resource to diagnose the issue.");
+			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://resource/health resource to diagnose the issue.");
 		}
 		catch (InvalidOperationException ex)
 		{
@@ -151,7 +151,7 @@ public sealed class ActivityTools
 		}
 		catch (SqliteException ex)
 		{
-			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://health resource to diagnose the issue.");
+			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://resource/health resource to diagnose the issue.");
 		}
 		catch (InvalidOperationException ex)
 		{
@@ -204,7 +204,7 @@ public sealed class ActivityTools
 		}
 		catch (SqliteException ex)
 		{
-			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://health resource to diagnose the issue.");
+			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://resource/health resource to diagnose the issue.");
 		}
 		catch (InvalidOperationException ex)
 		{
@@ -297,7 +297,7 @@ public sealed class ActivityTools
 		}
 		catch (SqliteException ex)
 		{
-			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://health resource to diagnose the issue.");
+			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://resource/health resource to diagnose the issue.");
 		}
 		catch (InvalidOperationException ex)
 		{
