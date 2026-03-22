@@ -19,10 +19,12 @@ internal static class ManicTimeReplHandlers
 	public static async Task<object> ListActivitiesAsync(
 		[Description("Timeline identifier returned by timeline list.")] long timelineId,
 		[Description("Inclusive activity date range.")] ReplDateRange period,
-		ActivityListOptions options,
+		ActivityListOptions? options,
 		[FromServices] ActivityTools tools,
-		CancellationToken cancellationToken) =>
-		ReplToolResultAdapter.FromCallToolResult(
+		CancellationToken cancellationToken)
+	{
+		options ??= new ActivityListOptions();
+		return ReplToolResultAdapter.FromCallToolResult(
 			await tools.GetActivitiesAsync(
 				timelineId,
 				ToDateLiteral(period.From),
@@ -30,74 +32,92 @@ internal static class ManicTimeReplHandlers
 				options.Limit,
 				options.IncludeGroupDetails,
 				cancellationToken).ConfigureAwait(false));
+	}
 
 	public static async Task<object> ListComputerUsageAsync(
 		[Description("Inclusive computer-usage date range.")] ReplDateRange period,
-		LimitOptions options,
+		LimitOptions? options,
 		[FromServices] ActivityTools tools,
-		CancellationToken cancellationToken) =>
-		ReplToolResultAdapter.FromCallToolResult(
+		CancellationToken cancellationToken)
+	{
+		options ??= new LimitOptions();
+		return ReplToolResultAdapter.FromCallToolResult(
 			await tools.GetComputerUsageAsync(
 				ToDateLiteral(period.From),
 				ToDateLiteral(period.To),
 				options.Limit,
 				cancellationToken).ConfigureAwait(false));
+	}
 
 	public static async Task<object> ListTagsAsync(
 		[Description("Inclusive tag date range.")] ReplDateRange period,
-		LimitOptions options,
+		LimitOptions? options,
 		[FromServices] ActivityTools tools,
-		CancellationToken cancellationToken) =>
-		ReplToolResultAdapter.FromCallToolResult(
+		CancellationToken cancellationToken)
+	{
+		options ??= new LimitOptions();
+		return ReplToolResultAdapter.FromCallToolResult(
 			await tools.GetTagsAsync(
 				ToDateLiteral(period.From),
 				ToDateLiteral(period.To),
 				options.Limit,
 				cancellationToken).ConfigureAwait(false));
+	}
 
 	public static async Task<object> ListApplicationUsageAsync(
 		[Description("Inclusive application-usage date range.")] ReplDateRange period,
-		LimitOptions options,
+		LimitOptions? options,
 		[FromServices] ActivityTools tools,
-		CancellationToken cancellationToken) =>
-		ReplToolResultAdapter.FromCallToolResult(
+		CancellationToken cancellationToken)
+	{
+		options ??= new LimitOptions();
+		return ReplToolResultAdapter.FromCallToolResult(
 			await tools.GetApplicationUsageAsync(
 				ToDateLiteral(period.From),
 				ToDateLiteral(period.To),
 				options.Limit,
 				cancellationToken).ConfigureAwait(false));
+	}
 
 	public static async Task<object> ListDocumentUsageAsync(
 		[Description("Inclusive document-usage date range.")] ReplDateRange period,
-		LimitOptions options,
+		LimitOptions? options,
 		[FromServices] ActivityTools tools,
-		CancellationToken cancellationToken) =>
-		ReplToolResultAdapter.FromCallToolResult(
+		CancellationToken cancellationToken)
+	{
+		options ??= new LimitOptions();
+		return ReplToolResultAdapter.FromCallToolResult(
 			await tools.GetDocumentUsageAsync(
 				ToDateLiteral(period.From),
 				ToDateLiteral(period.To),
 				options.Limit,
 				cancellationToken).ConfigureAwait(false));
+	}
 
 	public static async Task<object> ListWebsiteUsageAsync(
 		[Description("Inclusive website-usage date range.")] ReplDateRange period,
-		WebsiteUsageOptions options,
+		WebsiteUsageOptions? options,
 		[FromServices] NarrativeTools tools,
-		CancellationToken cancellationToken) =>
-		ReplToolResultAdapter.FromCallToolResult(
+		CancellationToken cancellationToken)
+	{
+		options ??= new WebsiteUsageOptions();
+		return ReplToolResultAdapter.FromCallToolResult(
 			await tools.GetWebsiteUsageAsync(
 				ToDateLiteral(period.From),
 				ToDateLiteral(period.To),
 				options.Limit,
 				options.MinMinutes,
 				cancellationToken).ConfigureAwait(false));
+	}
 
 	public static async Task<object> BuildDailySummaryAsync(
 		[Description("Date to summarize.")] DateOnly date,
-		DailySummaryOptions options,
+		DailySummaryOptions? options,
 		[FromServices] NarrativeTools tools,
-		CancellationToken cancellationToken) =>
-		ReplToolResultAdapter.FromCallToolResult(
+		CancellationToken cancellationToken)
+	{
+		options ??= new DailySummaryOptions();
+		return ReplToolResultAdapter.FromCallToolResult(
 			await tools.GetDailySummaryAsync(
 				ToDateLiteral(date),
 				options.IncludeSegments,
@@ -106,13 +126,16 @@ internal static class ManicTimeReplHandlers
 				options.MaxGapMinutes,
 				options.MaxSegments,
 				cancellationToken).ConfigureAwait(false));
+	}
 
 	public static async Task<object> BuildNarrativeSummaryAsync(
 		[Description("Inclusive narrative date range.")] ReplDateRange period,
-		NarrativeSummaryOptions options,
+		NarrativeSummaryOptions? options,
 		[FromServices] NarrativeTools tools,
-		CancellationToken cancellationToken) =>
-		ReplToolResultAdapter.FromCallToolResult(
+		CancellationToken cancellationToken)
+	{
+		options ??= new NarrativeSummaryOptions();
+		return ReplToolResultAdapter.FromCallToolResult(
 			await tools.GetActivityNarrativeAsync(
 				ToDateLiteral(period.From),
 				ToDateLiteral(period.To),
@@ -122,6 +145,7 @@ internal static class ManicTimeReplHandlers
 				options.IncludeSummary,
 				options.MaxSegments,
 				cancellationToken).ConfigureAwait(false));
+	}
 
 	public static async Task<object> BuildPeriodSummaryAsync(
 		[Description("Inclusive period date range.")] ReplDateRange period,
@@ -135,10 +159,11 @@ internal static class ManicTimeReplHandlers
 
 	public static async Task<object> ListScreenshotsAsync(
 		[Description("Inclusive screenshot time window.")] ReplDateTimeRange window,
-		ScreenshotListOptions options,
+		ScreenshotListOptions? options,
 		[FromServices] IScreenshotService screenshotService,
 		CancellationToken cancellationToken)
 	{
+		options ??= new ScreenshotListOptions();
 		var selection = await screenshotService.ListScreenshotsAsync(
 			new ScreenshotQuery
 			{
@@ -264,14 +289,16 @@ internal static class ManicTimeReplHandlers
 
 	public static async Task<object> SaveScreenshotAsync(
 		[Description("Screenshot reference returned by screenshot list.")] string screenshotRef,
-		ScreenshotSaveOptions saveOptions,
-		ScreenshotCropOptions cropOptions,
+		ScreenshotSaveOptions? saveOptions,
+		ScreenshotCropOptions? cropOptions,
 		[FromServices] IScreenshotRegistry registry,
 		[FromServices] IScreenshotService screenshotService,
 		[FromServices] ICropService cropService,
 		IServiceProvider services,
 		CancellationToken cancellationToken)
 	{
+		saveOptions ??= new ScreenshotSaveOptions();
+		cropOptions ??= new ScreenshotCropOptions();
 		var info = registry.TryResolve(screenshotRef);
 		if (info is null)
 		{

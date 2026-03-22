@@ -15,9 +15,9 @@ namespace ManicTimeMcp.Repl;
 public static class ManicTimeReplApp
 {
 	/// <summary>Creates the configured Repl application.</summary>
-	public static ReplApp Create()
+	public static ReplApp Create(Action<IServiceCollection>? configureServices = null)
 	{
-		var app = ReplApp.Create(ConfigureServices).UseDefaultInteractive();
+		var app = ReplApp.Create(services => ConfigureServices(services, configureServices)).UseDefaultInteractive();
 
 		app.UseMcpServer(ConfigureMcpOptions);
 
@@ -41,16 +41,29 @@ public static class ManicTimeReplApp
 	}
 
 	/// <summary>Builds the MCP server options from the Repl command graph.</summary>
-	public static McpServerOptions BuildMcpServerOptions()
+	public static McpServerOptions BuildMcpServerOptions(Action<IServiceCollection>? configureServices = null) =>
+		BuildMcpServerOptions(Create(configureServices));
+
+	/// <summary>Builds the MCP server options from an existing Repl app.</summary>
+	public static McpServerOptions BuildMcpServerOptions(ReplApp app)
 	{
-		var app = Create();
+		ArgumentNullException.ThrowIfNull(app);
 		var coreProperty = typeof(ReplApp).GetProperty("Core", BindingFlags.Instance | BindingFlags.NonPublic);
 		var core = coreProperty?.GetValue(app) as ICoreReplApp
 			?? throw new InvalidOperationException("Unable to resolve the Repl core graph for MCP option building.");
-		return core.BuildMcpServerOptions(ConfigureMcpOptions);
+		return core.BuildMcpServerOptions(ConfigureMcpOptions, GetServiceProvider(app));
 	}
 
-	private static void ConfigureServices(IServiceCollection services)
+	/// <summary>Resolves the shared service provider used by the Repl app.</summary>
+	internal static IServiceProvider GetServiceProvider(ReplApp app)
+	{
+		ArgumentNullException.ThrowIfNull(app);
+		var ensureSharedProvider = typeof(ReplApp).GetMethod("EnsureSharedProvider", BindingFlags.Instance | BindingFlags.NonPublic);
+		return ensureSharedProvider?.Invoke(app, parameters: null) as IServiceProvider
+			?? throw new InvalidOperationException("Unable to resolve the Repl app service provider.");
+	}
+
+	private static void ConfigureServices(IServiceCollection services, Action<IServiceCollection>? configureServices)
 	{
 		services.AddLogging(builder =>
 		{
@@ -63,10 +76,7 @@ public static class ManicTimeReplApp
 			.AddManicTimeDatabase()
 			.AddManicTimeScreenshots();
 
-		services.AddSingleton<TimelineTools>();
-		services.AddSingleton<ActivityTools>();
-		services.AddSingleton<NarrativeTools>();
-		services.AddSingleton<ManicTimeResources>();
+		configureServices?.Invoke(services);
 	}
 
 	private static void ConfigureMcpOptions(ReplMcpServerOptions options)
@@ -81,7 +91,14 @@ public static class ManicTimeReplApp
 	{
 		app.Context("timeline", timeline =>
 		{
-			timeline.Map("list", ManicTimeReplHandlers.ListTimelinesAsync)
+			timeline.Map(
+				"list",
+				(
+					ITimelineRepository timelineRepository,
+					CancellationToken cancellationToken) =>
+						ManicTimeReplHandlers.ListTimelinesAsync(
+							CreateTimelineTools(timelineRepository),
+							cancellationToken))
 				.WithDescription("List available ManicTime timelines.")
 				.WithDetails("Returns every available timeline together with its schema information.")
 				.ReadOnly();
@@ -92,15 +109,59 @@ public static class ManicTimeReplApp
 	{
 		app.Context("activity", activity =>
 		{
-			activity.Map("list", ManicTimeReplHandlers.ListActivitiesAsync)
+			activity.Map(
+				"list",
+				(
+					long timelineId,
+					ReplDateRange period,
+					ActivityListOptions options,
+					IActivityRepository activityRepository,
+					ITimelineRepository timelineRepository,
+					IUsageRepository usageRepository,
+					QueryCapabilityMatrix capabilities,
+					CancellationToken cancellationToken) =>
+						ManicTimeReplHandlers.ListActivitiesAsync(
+							timelineId,
+							period,
+							options,
+							CreateActivityTools(activityRepository, timelineRepository, usageRepository, capabilities),
+							cancellationToken))
 				.WithDescription("List activities for a timeline inside a date range.")
 				.ReadOnly();
 
-			activity.Map("computer-usage", ManicTimeReplHandlers.ListComputerUsageAsync)
+			activity.Map(
+				"computer-usage",
+				(
+					ReplDateRange period,
+					LimitOptions options,
+					IActivityRepository activityRepository,
+					ITimelineRepository timelineRepository,
+					IUsageRepository usageRepository,
+					QueryCapabilityMatrix capabilities,
+					CancellationToken cancellationToken) =>
+						ManicTimeReplHandlers.ListComputerUsageAsync(
+							period,
+							options,
+							CreateActivityTools(activityRepository, timelineRepository, usageRepository, capabilities),
+							cancellationToken))
 				.WithDescription("List computer usage intervals for a date range.")
 				.ReadOnly();
 
-			activity.Map("tags", ManicTimeReplHandlers.ListTagsAsync)
+			activity.Map(
+				"tags",
+				(
+					ReplDateRange period,
+					LimitOptions options,
+					IActivityRepository activityRepository,
+					ITimelineRepository timelineRepository,
+					IUsageRepository usageRepository,
+					QueryCapabilityMatrix capabilities,
+					CancellationToken cancellationToken) =>
+						ManicTimeReplHandlers.ListTagsAsync(
+							period,
+							options,
+							CreateActivityTools(activityRepository, timelineRepository, usageRepository, capabilities),
+							cancellationToken))
 				.WithDescription("List tag activities for a date range.")
 				.ReadOnly();
 		});
@@ -110,15 +171,59 @@ public static class ManicTimeReplApp
 	{
 		app.Context("usage", usage =>
 		{
-			usage.Map("applications", ManicTimeReplHandlers.ListApplicationUsageAsync)
+			usage.Map(
+				"applications",
+				(
+					ReplDateRange period,
+					LimitOptions options,
+					IActivityRepository activityRepository,
+					ITimelineRepository timelineRepository,
+					IUsageRepository usageRepository,
+					QueryCapabilityMatrix capabilities,
+					CancellationToken cancellationToken) =>
+						ManicTimeReplHandlers.ListApplicationUsageAsync(
+							period,
+							options,
+							CreateActivityTools(activityRepository, timelineRepository, usageRepository, capabilities),
+							cancellationToken))
 				.WithDescription("Summarize application usage for a date range.")
 				.ReadOnly();
 
-			usage.Map("documents", ManicTimeReplHandlers.ListDocumentUsageAsync)
+			usage.Map(
+				"documents",
+				(
+					ReplDateRange period,
+					LimitOptions options,
+					IActivityRepository activityRepository,
+					ITimelineRepository timelineRepository,
+					IUsageRepository usageRepository,
+					QueryCapabilityMatrix capabilities,
+					CancellationToken cancellationToken) =>
+						ManicTimeReplHandlers.ListDocumentUsageAsync(
+							period,
+							options,
+							CreateActivityTools(activityRepository, timelineRepository, usageRepository, capabilities),
+							cancellationToken))
 				.WithDescription("Summarize document usage for a date range.")
 				.ReadOnly();
 
-			usage.Map("websites", ManicTimeReplHandlers.ListWebsiteUsageAsync)
+			usage.Map(
+				"websites",
+				(
+					ReplDateRange period,
+					WebsiteUsageOptions options,
+					IActivityRepository activityRepository,
+					ITimelineRepository timelineRepository,
+					IUsageRepository usageRepository,
+					QueryCapabilityMatrix capabilities,
+					IScreenshotService screenshotService,
+					IScreenshotRegistry screenshotRegistry,
+					CancellationToken cancellationToken) =>
+						ManicTimeReplHandlers.ListWebsiteUsageAsync(
+							period,
+							options,
+							CreateNarrativeTools(activityRepository, timelineRepository, usageRepository, capabilities, screenshotService, screenshotRegistry),
+							cancellationToken))
 				.WithDescription("Summarize website usage for a date range.")
 				.ReadOnly();
 		});
@@ -128,98 +233,387 @@ public static class ManicTimeReplApp
 	{
 		app.Context("summary", summary =>
 		{
-			summary.Map("daily", ManicTimeReplHandlers.BuildDailySummaryAsync)
-				.WithDescription("Build a single-day activity summary.")
-				.WithDetails("Returns segments, aggregate app data, website insights, and suggested screenshots for the selected date.")
-				.ReadOnly();
-
-			summary.Map("narrative", ManicTimeReplHandlers.BuildNarrativeSummaryAsync)
-				.WithDescription("Build a narrative of what happened during a date range.")
-				.WithDetails("Best suited for day-scale retrospectives and timeline reconstruction.")
-				.ReadOnly();
-
-			summary.Map("period", ManicTimeReplHandlers.BuildPeriodSummaryAsync)
-				.WithDescription("Build a multi-day summary with patterns and day breakdowns.")
-				.ReadOnly();
+			MapSummaryDailyCommand(summary);
+			MapSummaryNarrativeCommand(summary);
+			MapSummaryPeriodCommand(summary);
 		});
+	}
+
+	private static void MapSummaryDailyCommand(IReplMap summary)
+	{
+		summary.Map(
+			"daily",
+			(
+				DateOnly date,
+				DailySummaryOptions options,
+				IActivityRepository activityRepository,
+				ITimelineRepository timelineRepository,
+				IUsageRepository usageRepository,
+				QueryCapabilityMatrix capabilities,
+				IScreenshotService screenshotService,
+				IScreenshotRegistry screenshotRegistry,
+				CancellationToken cancellationToken) =>
+					ManicTimeReplHandlers.BuildDailySummaryAsync(
+						date,
+						options,
+						CreateNarrativeTools(activityRepository, timelineRepository, usageRepository, capabilities, screenshotService, screenshotRegistry),
+						cancellationToken))
+			.WithDescription("Build a single-day activity summary.")
+			.WithDetails("Returns segments, aggregate app data, website insights, and suggested screenshots for the selected date.")
+			.ReadOnly();
+	}
+
+	private static void MapSummaryNarrativeCommand(IReplMap summary)
+	{
+		summary.Map(
+			"narrative",
+			(
+				ReplDateRange period,
+				NarrativeSummaryOptions options,
+				IActivityRepository activityRepository,
+				ITimelineRepository timelineRepository,
+				IUsageRepository usageRepository,
+				QueryCapabilityMatrix capabilities,
+				IScreenshotService screenshotService,
+				IScreenshotRegistry screenshotRegistry,
+				CancellationToken cancellationToken) =>
+					ManicTimeReplHandlers.BuildNarrativeSummaryAsync(
+						period,
+						options,
+						CreateNarrativeTools(activityRepository, timelineRepository, usageRepository, capabilities, screenshotService, screenshotRegistry),
+						cancellationToken))
+			.WithDescription("Build a narrative of what happened during a date range.")
+			.WithDetails("Best suited for day-scale retrospectives and timeline reconstruction.")
+			.ReadOnly();
+	}
+
+	private static void MapSummaryPeriodCommand(IReplMap summary)
+	{
+		summary.Map(
+			"period",
+			(
+				ReplDateRange period,
+				IActivityRepository activityRepository,
+				ITimelineRepository timelineRepository,
+				IUsageRepository usageRepository,
+				QueryCapabilityMatrix capabilities,
+				IScreenshotService screenshotService,
+				IScreenshotRegistry screenshotRegistry,
+				CancellationToken cancellationToken) =>
+					ManicTimeReplHandlers.BuildPeriodSummaryAsync(
+						period,
+						CreateNarrativeTools(activityRepository, timelineRepository, usageRepository, capabilities, screenshotService, screenshotRegistry),
+						cancellationToken))
+			.WithDescription("Build a multi-day summary with patterns and day breakdowns.")
+			.ReadOnly();
 	}
 
 	private static void MapScreenshotCommands(ReplApp app)
 	{
 		app.Context("screenshot", screenshot =>
 		{
-			screenshot.Map("list", ManicTimeReplHandlers.ListScreenshotsAsync)
-				.WithDescription("List screenshot metadata for a date-time window.")
-				.WithDetails("Returns metadata only. Use screenshot get or screenshot crop to retrieve image bytes.")
-				.ReadOnly();
-
-			screenshot.Map("get", ManicTimeReplHandlers.GetScreenshot)
-				.WithDescription("Fetch a screenshot payload by reference.")
-				.WithDetails("Returns metadata plus thumbnail/full image payloads encoded as base64 text.")
-				.ReadOnly();
-
-			screenshot.Map("crop", ManicTimeReplHandlers.CropScreenshot)
-				.WithDescription("Crop a screenshot region of interest.")
-				.ReadOnly();
-
-			screenshot.Map("save", ManicTimeReplHandlers.SaveScreenshotAsync)
-				.WithDescription("Persist a screenshot inside an MCP client root.")
-				.WithDetails("Validates output paths against MCP client roots and can optionally save a cropped region.")
-				.OpenWorld();
+			MapScreenshotListCommand(screenshot);
+			MapScreenshotGetCommand(screenshot);
+			MapScreenshotCropCommand(screenshot);
+			MapScreenshotSaveCommand(screenshot);
 		});
+	}
+
+	private static void MapScreenshotListCommand(IReplMap screenshot)
+	{
+		screenshot.Map(
+				"list",
+				(
+					ReplDateTimeRange window,
+					ScreenshotListOptions options,
+					IScreenshotService screenshotService,
+					CancellationToken cancellationToken) =>
+					ManicTimeReplHandlers.ListScreenshotsAsync(
+						window,
+						options,
+						screenshotService,
+						cancellationToken))
+			.WithDescription("List screenshot metadata for a date-time window.")
+			.WithDetails("Returns metadata only. Use screenshot get or screenshot crop to retrieve image bytes.")
+			.ReadOnly();
+	}
+
+	private static void MapScreenshotGetCommand(IReplMap screenshot)
+	{
+		screenshot.Map(
+				"get",
+				(
+					string screenshotRef,
+					IScreenshotRegistry registry,
+					IScreenshotService screenshotService) =>
+					ManicTimeReplHandlers.GetScreenshot(
+						screenshotRef,
+						registry,
+						screenshotService))
+			.WithDescription("Fetch a screenshot payload by reference.")
+			.WithDetails("Returns metadata plus thumbnail/full image payloads encoded as base64 text.")
+			.ReadOnly();
+	}
+
+	private static void MapScreenshotCropCommand(IReplMap screenshot)
+	{
+		screenshot.Map(
+			"crop",
+				(
+					string screenshotRef,
+					double x,
+					double y,
+					double width,
+					double height,
+					string? coordinateUnits,
+					IScreenshotRegistry registry,
+					IScreenshotService screenshotService,
+					ICropService cropService) =>
+					ManicTimeReplHandlers.CropScreenshot(
+						screenshotRef,
+						x,
+						y,
+						width,
+						height,
+						coordinateUnits,
+						registry,
+						screenshotService,
+						cropService))
+			.WithDescription("Crop a screenshot region of interest.")
+			.ReadOnly();
+	}
+
+	private static void MapScreenshotSaveCommand(IReplMap screenshot)
+	{
+		screenshot.Map(
+			"save",
+			(
+				string screenshotRef,
+				ScreenshotSaveOptions saveOptions,
+				ScreenshotCropOptions cropOptions,
+				IScreenshotRegistry registry,
+				IScreenshotService screenshotService,
+				ICropService cropService,
+				IServiceProvider services,
+				CancellationToken cancellationToken) =>
+					ManicTimeReplHandlers.SaveScreenshotAsync(
+						screenshotRef,
+						saveOptions,
+						cropOptions,
+						registry,
+						screenshotService,
+						cropService,
+						services,
+						cancellationToken))
+			.WithDescription("Persist a screenshot inside an MCP client root.")
+			.WithDetails("Validates output paths against MCP client roots and can optionally save a cropped region.")
+			.OpenWorld();
 	}
 
 	private static void MapResourceCommands(ReplApp app)
 	{
 		app.Context("resource", resource =>
 		{
-			resource.Map("config", ManicTimeReplHandlers.GetConfigResource)
-				.WithDescription("Read the active ManicTime configuration.")
-				.ReadOnly()
-				.AsResource();
-
-			resource.Map("timelines", ManicTimeReplHandlers.GetTimelinesResourceAsync)
-				.WithDescription("Read the available timelines resource.")
-				.ReadOnly()
-				.AsResource();
-
-			resource.Map("health", ManicTimeReplHandlers.GetHealthResource)
-				.WithDescription("Read the current health diagnostics resource.")
-				.ReadOnly()
-				.AsResource();
+			MapResourceConfigCommand(resource);
+			MapResourceTimelinesCommand(resource);
+			MapResourceHealthCommand(resource);
 
 			resource.Map("guide", ManicTimeReplHandlers.GetGuideResource)
 				.WithDescription("Read the Repl-first usage guide.")
 				.ReadOnly()
 				.AsResource();
 
-			resource.Map("environment", ManicTimeReplHandlers.GetEnvironmentResourceAsync)
-				.WithDescription("Read the device and runtime environment resource.")
-				.ReadOnly()
-				.AsResource();
-
-			resource.Map("data-range", ManicTimeReplHandlers.GetDataRangeResourceAsync)
-				.WithDescription("Read known data boundaries per timeline.")
-				.ReadOnly()
-				.AsResource();
+			MapResourceEnvironmentCommand(resource);
+			MapResourceDataRangeCommand(resource);
 		});
+	}
+
+	private static void MapResourceConfigCommand(IReplMap resource)
+	{
+		resource.Map(
+			"config",
+			(
+				IDataDirectoryResolver resolver,
+				IHealthService healthService,
+				ITimelineRepository timelineRepository,
+				IEnvironmentRepository environmentRepository,
+				IUsageRepository usageRepository,
+				IScreenshotRegistry screenshotRegistry,
+				IScreenshotService screenshotService) =>
+					ManicTimeReplHandlers.GetConfigResource(
+						CreateResources(
+							resolver,
+							healthService,
+							timelineRepository,
+							environmentRepository,
+							usageRepository,
+							screenshotRegistry,
+							screenshotService)))
+			.WithDescription("Read the active ManicTime configuration.")
+			.ReadOnly()
+			.AsResource();
+	}
+
+	private static void MapResourceTimelinesCommand(IReplMap resource)
+	{
+		resource.Map(
+			"timelines",
+			(
+				IDataDirectoryResolver resolver,
+				IHealthService healthService,
+				ITimelineRepository timelineRepository,
+				IEnvironmentRepository environmentRepository,
+				IUsageRepository usageRepository,
+				IScreenshotRegistry screenshotRegistry,
+				IScreenshotService screenshotService,
+				CancellationToken cancellationToken) =>
+					ManicTimeReplHandlers.GetTimelinesResourceAsync(
+						CreateResources(
+							resolver,
+							healthService,
+							timelineRepository,
+							environmentRepository,
+							usageRepository,
+							screenshotRegistry,
+							screenshotService),
+						cancellationToken))
+			.WithDescription("Read the available timelines resource.")
+			.ReadOnly()
+			.AsResource();
+	}
+
+	private static void MapResourceHealthCommand(IReplMap resource)
+	{
+		resource.Map(
+			"health",
+			(
+				IDataDirectoryResolver resolver,
+				IHealthService healthService,
+				ITimelineRepository timelineRepository,
+				IEnvironmentRepository environmentRepository,
+				IUsageRepository usageRepository,
+				IScreenshotRegistry screenshotRegistry,
+				IScreenshotService screenshotService) =>
+					ManicTimeReplHandlers.GetHealthResource(
+						CreateResources(
+							resolver,
+							healthService,
+							timelineRepository,
+							environmentRepository,
+							usageRepository,
+							screenshotRegistry,
+							screenshotService)))
+			.WithDescription("Read the current health diagnostics resource.")
+			.ReadOnly()
+			.AsResource();
+	}
+
+	private static void MapResourceEnvironmentCommand(IReplMap resource)
+	{
+		resource.Map(
+			"environment",
+			(
+				IDataDirectoryResolver resolver,
+				IHealthService healthService,
+				ITimelineRepository timelineRepository,
+				IEnvironmentRepository environmentRepository,
+				IUsageRepository usageRepository,
+				IScreenshotRegistry screenshotRegistry,
+				IScreenshotService screenshotService,
+				CancellationToken cancellationToken) =>
+					ManicTimeReplHandlers.GetEnvironmentResourceAsync(
+						CreateResources(
+							resolver,
+							healthService,
+							timelineRepository,
+							environmentRepository,
+							usageRepository,
+							screenshotRegistry,
+							screenshotService),
+						cancellationToken))
+			.WithDescription("Read the device and runtime environment resource.")
+			.ReadOnly()
+			.AsResource();
+	}
+
+	private static void MapResourceDataRangeCommand(IReplMap resource)
+	{
+		resource.Map(
+			"data-range",
+			(
+				IDataDirectoryResolver resolver,
+				IHealthService healthService,
+				ITimelineRepository timelineRepository,
+				IEnvironmentRepository environmentRepository,
+				IUsageRepository usageRepository,
+				IScreenshotRegistry screenshotRegistry,
+				IScreenshotService screenshotService,
+				CancellationToken cancellationToken) =>
+					ManicTimeReplHandlers.GetDataRangeResourceAsync(
+						CreateResources(
+							resolver,
+							healthService,
+							timelineRepository,
+							environmentRepository,
+							usageRepository,
+							screenshotRegistry,
+							screenshotService),
+						cancellationToken))
+			.WithDescription("Read known data boundaries per timeline.")
+			.ReadOnly()
+			.AsResource();
 	}
 
 	private static void MapPromptCommands(ReplApp app)
 	{
 		app.Context("prompt", prompt =>
 		{
-			prompt.Map("daily-review", ManicTimeReplHandlers.BuildDailyReviewPrompt)
+			prompt.Map(
+				"daily-review",
+				(DateOnly date) => ManicTimeReplHandlers.BuildDailyReviewPrompt(date))
 				.WithDescription("Guide a daily review workflow.")
 				.AsPrompt();
 
-			prompt.Map("weekly-review", ManicTimeReplHandlers.BuildWeeklyReviewPrompt)
+			prompt.Map(
+				"weekly-review",
+				(ReplDateRange period) => ManicTimeReplHandlers.BuildWeeklyReviewPrompt(period))
 				.WithDescription("Guide a multi-day review workflow.")
 				.AsPrompt();
 
-			prompt.Map("screenshot-investigation", ManicTimeReplHandlers.BuildScreenshotInvestigationPrompt)
+			prompt.Map(
+				"screenshot-investigation",
+				(ReplDateTimeRange window) => ManicTimeReplHandlers.BuildScreenshotInvestigationPrompt(window))
 				.WithDescription("Guide a screenshot-led investigation workflow.")
 				.AsPrompt();
 		});
 	}
+
+	private static TimelineTools CreateTimelineTools(ITimelineRepository timelineRepository) =>
+		new(timelineRepository);
+
+	private static ActivityTools CreateActivityTools(
+		IActivityRepository activityRepository,
+		ITimelineRepository timelineRepository,
+		IUsageRepository usageRepository,
+		QueryCapabilityMatrix capabilities) =>
+			new(activityRepository, timelineRepository, usageRepository, capabilities);
+
+	private static NarrativeTools CreateNarrativeTools(
+		IActivityRepository activityRepository,
+		ITimelineRepository timelineRepository,
+		IUsageRepository usageRepository,
+		QueryCapabilityMatrix capabilities,
+		IScreenshotService screenshotService,
+		IScreenshotRegistry screenshotRegistry) =>
+			new(activityRepository, timelineRepository, usageRepository, capabilities, screenshotService, screenshotRegistry);
+
+	private static ManicTimeResources CreateResources(
+		IDataDirectoryResolver resolver,
+		IHealthService healthService,
+		ITimelineRepository timelineRepository,
+		IEnvironmentRepository environmentRepository,
+		IUsageRepository usageRepository,
+		IScreenshotRegistry screenshotRegistry,
+		IScreenshotService screenshotService) =>
+			new(resolver, healthService, timelineRepository, environmentRepository, usageRepository, screenshotRegistry, screenshotService);
 }

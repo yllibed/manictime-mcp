@@ -38,8 +38,9 @@ internal sealed class ReplMcpTestHarness : IAsyncDisposable
 	{
 		ArgumentNullException.ThrowIfNull(appFactory);
 
-		_ = appFactory();
-		var options = ManicTimeMcp.Repl.ManicTimeReplApp.BuildMcpServerOptions();
+		var app = appFactory();
+		var options = ManicTimeMcp.Repl.ManicTimeReplApp.BuildMcpServerOptions(app);
+		var services = ManicTimeMcp.Repl.ManicTimeReplApp.GetServiceProvider(app);
 		var serverName = options.ServerInfo?.Name ?? "ManicTime MCP";
 
 		var clientToServer = new Pipe();
@@ -49,7 +50,7 @@ internal sealed class ReplMcpTestHarness : IAsyncDisposable
 			serverToClient.Writer.AsStream(),
 			serverName);
 		var cts = new CancellationTokenSource();
-		var server = McpServer.Create(transport, options);
+		var server = McpServer.Create(transport, options, serviceProvider: services);
 		var serverTask = server.RunAsync(cts.Token);
 
 		var client = await McpClient.CreateAsync(

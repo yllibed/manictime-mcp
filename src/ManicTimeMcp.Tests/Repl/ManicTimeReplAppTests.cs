@@ -50,7 +50,7 @@ public sealed class ManicTimeReplAppTests
 	[TestMethod]
 	public async Task PromptCommands_CanBeExecutedThroughReplTesting()
 	{
-		await using var host = ReplTestHost.Create(ManicTimeReplApp.Create);
+		await using var host = ReplTestHost.Create(() => ManicTimeReplApp.Create());
 		await using var session = await host.OpenSessionAsync().ConfigureAwait(false);
 
 		var execution = await session.RunCommandAsync(
@@ -65,7 +65,7 @@ public sealed class ManicTimeReplAppTests
 	[TestMethod]
 	public async Task ContextHelp_CanBeRenderedThroughReplTesting()
 	{
-		await using var host = ReplTestHost.Create(ManicTimeReplApp.Create);
+		await using var host = ReplTestHost.Create(() => ManicTimeReplApp.Create());
 		await using var session = await host.OpenSessionAsync().ConfigureAwait(false);
 
 		var execution = await session.RunCommandAsync(
