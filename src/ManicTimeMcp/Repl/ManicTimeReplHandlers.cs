@@ -294,7 +294,7 @@ internal static class ManicTimeReplHandlers
 		[FromServices] IScreenshotRegistry registry,
 		[FromServices] IScreenshotService screenshotService,
 		[FromServices] ICropService cropService,
-		IServiceProvider services,
+		[FromServices] IServiceProvider services,
 		CancellationToken cancellationToken)
 	{
 		saveOptions ??= new ScreenshotSaveOptions();

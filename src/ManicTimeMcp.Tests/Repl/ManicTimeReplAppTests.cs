@@ -1,5 +1,7 @@
 using AwesomeAssertions;
+using ManicTimeMcp.Mcp;
 using ManicTimeMcp.Repl;
+using Microsoft.Extensions.DependencyInjection;
 using Repl.Testing;
 
 namespace ManicTimeMcp.Tests.Repl;
@@ -45,6 +47,26 @@ public sealed class ManicTimeReplAppTests
 
 		var promptDailyReview = model.Commands.Single(command => string.Equals(command.Path, "prompt daily-review", StringComparison.Ordinal));
 		promptDailyReview.IsPrompt.Should().BeTrue();
+	}
+
+	[TestMethod]
+	public void SharedServiceProvider_ResolvesModulesAndTransportNeutralServices()
+	{
+		var app = ManicTimeReplApp.Create();
+		var services = ManicTimeReplApp.GetServiceProvider(app);
+
+		services.GetRequiredService<TimelineModule>().Should().NotBeNull();
+		services.GetRequiredService<ActivityModule>().Should().NotBeNull();
+		services.GetRequiredService<UsageModule>().Should().NotBeNull();
+		services.GetRequiredService<SummaryModule>().Should().NotBeNull();
+		services.GetRequiredService<ScreenshotModule>().Should().NotBeNull();
+		services.GetRequiredService<ResourceModule>().Should().NotBeNull();
+		services.GetRequiredService<PromptModule>().Should().NotBeNull();
+
+		services.GetRequiredService<TimelineTools>().Should().NotBeNull();
+		services.GetRequiredService<ActivityTools>().Should().NotBeNull();
+		services.GetRequiredService<NarrativeTools>().Should().NotBeNull();
+		services.GetRequiredService<ManicTimeResources>().Should().NotBeNull();
 	}
 
 	[TestMethod]

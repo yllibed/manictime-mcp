@@ -20,13 +20,13 @@ public static class ManicTimeReplApp
 		var app = ReplApp.Create(services => ConfigureServices(services, configureServices)).UseDefaultInteractive();
 
 		app.UseMcpServer(ConfigureMcpOptions);
-		app.MapModule(new TimelineModule());
-		app.MapModule(new ActivityModule());
-		app.MapModule(new UsageModule());
-		app.MapModule(new SummaryModule());
-		app.MapModule(new ScreenshotModule());
-		app.MapModule(new ResourceModule());
-		app.MapModule(new PromptModule());
+		app.MapModule<TimelineModule>();
+		app.MapModule<ActivityModule>();
+		app.MapModule<UsageModule>();
+		app.MapModule<SummaryModule>();
+		app.MapModule<ScreenshotModule>();
+		app.MapModule<ResourceModule>();
+		app.MapModule<PromptModule>();
 
 		return app;
 	}
@@ -74,6 +74,19 @@ public static class ManicTimeReplApp
 			.AddManicTimeConfiguration()
 			.AddManicTimeDatabase()
 			.AddManicTimeScreenshots();
+
+		services.AddSingleton<TimelineTools>();
+		services.AddSingleton<ActivityTools>();
+		services.AddSingleton<NarrativeTools>();
+		services.AddSingleton<ManicTimeResources>();
+
+		services.AddSingleton<TimelineModule>();
+		services.AddSingleton<ActivityModule>();
+		services.AddSingleton<UsageModule>();
+		services.AddSingleton<SummaryModule>();
+		services.AddSingleton<ScreenshotModule>();
+		services.AddSingleton<ResourceModule>();
+		services.AddSingleton<PromptModule>();
 
 		configureServices?.Invoke(services);
 	}

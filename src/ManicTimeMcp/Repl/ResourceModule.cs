@@ -1,6 +1,3 @@
-using ManicTimeMcp.Configuration;
-using ManicTimeMcp.Database;
-using ManicTimeMcp.Mcp;
 using Repl;
 
 namespace ManicTimeMcp.Repl;
@@ -22,21 +19,7 @@ internal sealed class ResourceModule : IReplModule
 
 	private static void MapConfig(IReplMap resource)
 	{
-		resource.Map(
-			"config",
-			(
-				IDataDirectoryResolver resolver,
-				IHealthService healthService,
-				ITimelineRepository timelineRepository,
-				IEnvironmentRepository environmentRepository,
-				IUsageRepository usageRepository) =>
-					ManicTimeReplHandlers.GetConfigResource(
-						new ManicTimeResources(
-							resolver,
-							healthService,
-							timelineRepository,
-							environmentRepository,
-							usageRepository)))
+		resource.Map("config", ManicTimeReplHandlers.GetConfigResource)
 			.WithDescription("Read the active ManicTime configuration.")
 			.ReadOnly()
 			.AsResource();
@@ -44,23 +27,7 @@ internal sealed class ResourceModule : IReplModule
 
 	private static void MapTimelines(IReplMap resource)
 	{
-		resource.Map(
-			"timelines",
-			(
-				IDataDirectoryResolver resolver,
-				IHealthService healthService,
-				ITimelineRepository timelineRepository,
-				IEnvironmentRepository environmentRepository,
-				IUsageRepository usageRepository,
-				CancellationToken cancellationToken) =>
-					ManicTimeReplHandlers.GetTimelinesResourceAsync(
-						new ManicTimeResources(
-							resolver,
-							healthService,
-							timelineRepository,
-							environmentRepository,
-							usageRepository),
-						cancellationToken))
+		resource.Map("timelines", ManicTimeReplHandlers.GetTimelinesResourceAsync)
 			.WithDescription("Read the available timelines resource.")
 			.ReadOnly()
 			.AsResource();
@@ -68,21 +35,7 @@ internal sealed class ResourceModule : IReplModule
 
 	private static void MapHealth(IReplMap resource)
 	{
-		resource.Map(
-			"health",
-			(
-				IDataDirectoryResolver resolver,
-				IHealthService healthService,
-				ITimelineRepository timelineRepository,
-				IEnvironmentRepository environmentRepository,
-				IUsageRepository usageRepository) =>
-					ManicTimeReplHandlers.GetHealthResource(
-						new ManicTimeResources(
-							resolver,
-							healthService,
-							timelineRepository,
-							environmentRepository,
-							usageRepository)))
+		resource.Map("health", ManicTimeReplHandlers.GetHealthResource)
 			.WithDescription("Read the current health diagnostics resource.")
 			.ReadOnly()
 			.AsResource();
@@ -98,23 +51,7 @@ internal sealed class ResourceModule : IReplModule
 
 	private static void MapEnvironment(IReplMap resource)
 	{
-		resource.Map(
-			"environment",
-			(
-				IDataDirectoryResolver resolver,
-				IHealthService healthService,
-				ITimelineRepository timelineRepository,
-				IEnvironmentRepository environmentRepository,
-				IUsageRepository usageRepository,
-				CancellationToken cancellationToken) =>
-					ManicTimeReplHandlers.GetEnvironmentResourceAsync(
-						new ManicTimeResources(
-							resolver,
-							healthService,
-							timelineRepository,
-							environmentRepository,
-							usageRepository),
-						cancellationToken))
+		resource.Map("environment", ManicTimeReplHandlers.GetEnvironmentResourceAsync)
 			.WithDescription("Read the device and runtime environment resource.")
 			.ReadOnly()
 			.AsResource();
@@ -122,23 +59,7 @@ internal sealed class ResourceModule : IReplModule
 
 	private static void MapDataRange(IReplMap resource)
 	{
-		resource.Map(
-			"data-range",
-			(
-				IDataDirectoryResolver resolver,
-				IHealthService healthService,
-				ITimelineRepository timelineRepository,
-				IEnvironmentRepository environmentRepository,
-				IUsageRepository usageRepository,
-				CancellationToken cancellationToken) =>
-					ManicTimeReplHandlers.GetDataRangeResourceAsync(
-						new ManicTimeResources(
-							resolver,
-							healthService,
-							timelineRepository,
-							environmentRepository,
-							usageRepository),
-						cancellationToken))
+		resource.Map("data-range", ManicTimeReplHandlers.GetDataRangeResourceAsync)
 			.WithDescription("Read known data boundaries per timeline.")
 			.ReadOnly()
 			.AsResource();
