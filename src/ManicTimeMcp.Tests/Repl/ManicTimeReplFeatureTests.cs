@@ -62,6 +62,8 @@ public sealed class ManicTimeReplFeatureTests
 	};
 
 	private static readonly byte[] ScreenshotBytes = [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10];
+	private static readonly byte[] ThumbnailBytes = [0x01, 0x02, 0x03, 0x04];
+	private static readonly byte[] FullSizeBytes = [0x09, 0x08, 0x07, 0x06, 0x05];
 
 	[TestMethod]
 	public async Task McpSurface_UsesInjectedRepositoriesForTimelineAndActivityQueries()
@@ -210,6 +212,36 @@ public sealed class ManicTimeReplFeatureTests
 		var doc = ParseSingleTextPayload(result);
 		var screenshot = doc.RootElement.GetProperty("screenshots")[0];
 		screenshot.TryGetProperty("resourceUri", out _).Should().BeFalse();
+	}
+
+	[TestMethod]
+	public async Task ScreenshotGet_PrefersThumbnailPayloadWhenAvailable()
+	{
+		var registry = new ScreenshotRegistry();
+		var screenshotRef = registry.Register(SampleScreenshot);
+		var app = CreateApp(services =>
+		{
+			services.AddSingleton<IScreenshotRegistry>(registry);
+			services.AddSingleton<IScreenshotService>(new StubScreenshotService(
+				readScreenshot: static filePath => filePath.Contains(".thumbnail.", StringComparison.OrdinalIgnoreCase)
+					? ThumbnailBytes
+					: FullSizeBytes));
+		});
+
+		await using var harness = await ReplMcpTestHarness.CreateAsync(() => app).ConfigureAwait(false);
+
+		var result = await harness.Client.CallToolAsync(
+			"screenshot_get",
+			new Dictionary<string, object?>(StringComparer.Ordinal)
+			{
+				["screenshotRef"] = screenshotRef,
+			}).ConfigureAwait(false);
+
+		result.IsError.Should().NotBeTrue();
+
+		var doc = ParseSingleTextPayload(result);
+		doc.RootElement.GetProperty("thumbnailBase64").GetString().Should().Be(Convert.ToBase64String(ThumbnailBytes));
+		doc.RootElement.GetProperty("imageBase64").GetString().Should().Be(Convert.ToBase64String(ThumbnailBytes));
 	}
 
 	private static ReplApp CreateApp(Action<IServiceCollection>? configureServices = null) =>

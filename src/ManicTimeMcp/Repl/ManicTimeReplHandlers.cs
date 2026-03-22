@@ -212,7 +212,7 @@ internal static class ManicTimeReplHandlers
 		var fullSizePath = info.IsThumbnail ? GetFullSizePath(info.FilePath) : info.FilePath;
 		var thumbnailBytes = thumbnailPath is not null ? screenshotService.ReadScreenshot(thumbnailPath) : null;
 		var fullBytes = fullSizePath is not null ? screenshotService.ReadScreenshot(fullSizePath) : null;
-		var selectedBytes = fullBytes ?? thumbnailBytes;
+		var selectedBytes = thumbnailBytes ?? fullBytes;
 		if (selectedBytes is null)
 		{
 			return Results.NotFound("Screenshot file not found or inaccessible.");
