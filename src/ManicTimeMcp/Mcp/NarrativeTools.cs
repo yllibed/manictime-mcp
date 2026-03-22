@@ -5,13 +5,10 @@ using ManicTimeMcp.Database;
 using ManicTimeMcp.Mcp.Models;
 using ManicTimeMcp.Screenshots;
 using Microsoft.Data.Sqlite;
-using ModelContextProtocol.Protocol;
-using ModelContextProtocol.Server;
 
 namespace ManicTimeMcp.Mcp;
 
-/// <summary>MCP tools for narrative and summary queries.</summary>
-[McpServerToolType]
+/// <summary>Operations for narrative and summary queries.</summary>
 #pragma warning disable IL2026 // Trimming is disabled (PublishTrimmed=false); reflection-based JSON is safe
 public sealed class NarrativeTools
 {
@@ -47,8 +44,8 @@ public sealed class NarrativeTools
 	}
 
 	/// <summary>Returns a daily summary by delegating to narrative logic.</summary>
-	[McpServerTool(Name = "get_daily_summary", ReadOnly = true), Description("Get a structured summary of activity for a specific date, with segments, top applications, and websites. Includes suggested screenshots for visual context — use get_screenshot to fetch them.")]
-	public async Task<CallToolResult> GetDailySummaryAsync(
+	[Description("Get a structured summary of activity for a specific date, with segments, top applications, and websites. Includes suggested screenshots for visual context — use screenshot get to fetch them.")]
+	public async Task<ToolInvocationResult> GetDailySummaryAsync(
 		[Description("Date to summarize (ISO-8601, e.g. 2025-01-15)")] string date,
 		[Description("Include activity segments in response (default true). Set false to reduce payload when only summary data needed.")] bool includeSegments = true,
 		[Description("Minimum segment duration in minutes to include (default 0). Useful for filtering noise — e.g. 0.5 filters sub-30s segments.")] double minDurationMinutes = 0,
@@ -79,8 +76,8 @@ public sealed class NarrativeTools
 	}
 
 	/// <summary>Returns a structured narrative for "what did I do?"</summary>
-	[McpServerTool(Name = "get_activity_narrative", ReadOnly = true), Description("Get a structured narrative of activities for a date range. Best for single-day 'what did I do?' queries. Includes suggested screenshots when available.")]
-	public async Task<CallToolResult> GetActivityNarrativeAsync(
+	[Description("Get a structured narrative of activities for a date range. Best for single-day 'what did I do?' queries. Includes suggested screenshots when available.")]
+	public async Task<ToolInvocationResult> GetActivityNarrativeAsync(
 		[Description("Start date (ISO-8601, inclusive)")] string startDate,
 		[Description("End date (ISO-8601, exclusive)")] string endDate,
 		[Description("Include website usage (default true)")] bool includeWebsites = true,
@@ -110,8 +107,8 @@ public sealed class NarrativeTools
 	}
 
 	/// <summary>Returns a multi-day period summary.</summary>
-	[McpServerTool(Name = "get_period_summary", ReadOnly = true), Description("Get a multi-day summary with per-day breakdown and day-of-week patterns. Best for weekly/monthly overviews.")]
-	public async Task<CallToolResult> GetPeriodSummaryAsync(
+	[Description("Get a multi-day summary with per-day breakdown and day-of-week patterns. Best for weekly/monthly overviews.")]
+	public async Task<ToolInvocationResult> GetPeriodSummaryAsync(
 		[Description("Start date (ISO-8601, inclusive)")] string startDate,
 		[Description("End date (ISO-8601, exclusive, max 31 days from start)")] string endDate,
 		CancellationToken cancellationToken = default)
@@ -142,8 +139,8 @@ public sealed class NarrativeTools
 	}
 
 	/// <summary>Returns website usage with hourly or daily breakdown.</summary>
-	[McpServerTool(Name = "get_website_usage", ReadOnly = true), Description("Get website usage for a date range with hourly (<=7 days) or daily (>7 days) breakdown.")]
-	public async Task<CallToolResult> GetWebsiteUsageAsync(
+	[Description("Get website usage for a date range with hourly (<=7 days) or daily (>7 days) breakdown.")]
+	public async Task<ToolInvocationResult> GetWebsiteUsageAsync(
 		[Description("Start date (ISO-8601, inclusive)")] string startDate,
 		[Description("End date (ISO-8601, exclusive, max 31 days)")] string endDate,
 		[Description("Maximum number of websites (default 50, max 200)")] int? limit = null,

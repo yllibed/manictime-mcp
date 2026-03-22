@@ -13,7 +13,7 @@ internal static class ManicTimeReplHandlers
 	public static async Task<object> ListTimelinesAsync(
 		[FromServices] TimelineTools tools,
 		CancellationToken cancellationToken) =>
-		ReplToolResultAdapter.FromCallToolResult(
+		ReplToolResultAdapter.FromToolResult(
 			await tools.GetTimelinesAsync(cancellationToken).ConfigureAwait(false));
 
 	public static async Task<object> ListActivitiesAsync(
@@ -24,7 +24,7 @@ internal static class ManicTimeReplHandlers
 		CancellationToken cancellationToken)
 	{
 		options ??= new ActivityListOptions();
-		return ReplToolResultAdapter.FromCallToolResult(
+		return ReplToolResultAdapter.FromToolResult(
 			await tools.GetActivitiesAsync(
 				timelineId,
 				ToDateLiteral(period.From),
@@ -41,7 +41,7 @@ internal static class ManicTimeReplHandlers
 		CancellationToken cancellationToken)
 	{
 		options ??= new LimitOptions();
-		return ReplToolResultAdapter.FromCallToolResult(
+		return ReplToolResultAdapter.FromToolResult(
 			await tools.GetComputerUsageAsync(
 				ToDateLiteral(period.From),
 				ToDateLiteral(period.To),
@@ -56,7 +56,7 @@ internal static class ManicTimeReplHandlers
 		CancellationToken cancellationToken)
 	{
 		options ??= new LimitOptions();
-		return ReplToolResultAdapter.FromCallToolResult(
+		return ReplToolResultAdapter.FromToolResult(
 			await tools.GetTagsAsync(
 				ToDateLiteral(period.From),
 				ToDateLiteral(period.To),
@@ -71,7 +71,7 @@ internal static class ManicTimeReplHandlers
 		CancellationToken cancellationToken)
 	{
 		options ??= new LimitOptions();
-		return ReplToolResultAdapter.FromCallToolResult(
+		return ReplToolResultAdapter.FromToolResult(
 			await tools.GetApplicationUsageAsync(
 				ToDateLiteral(period.From),
 				ToDateLiteral(period.To),
@@ -86,7 +86,7 @@ internal static class ManicTimeReplHandlers
 		CancellationToken cancellationToken)
 	{
 		options ??= new LimitOptions();
-		return ReplToolResultAdapter.FromCallToolResult(
+		return ReplToolResultAdapter.FromToolResult(
 			await tools.GetDocumentUsageAsync(
 				ToDateLiteral(period.From),
 				ToDateLiteral(period.To),
@@ -101,7 +101,7 @@ internal static class ManicTimeReplHandlers
 		CancellationToken cancellationToken)
 	{
 		options ??= new WebsiteUsageOptions();
-		return ReplToolResultAdapter.FromCallToolResult(
+		return ReplToolResultAdapter.FromToolResult(
 			await tools.GetWebsiteUsageAsync(
 				ToDateLiteral(period.From),
 				ToDateLiteral(period.To),
@@ -117,7 +117,7 @@ internal static class ManicTimeReplHandlers
 		CancellationToken cancellationToken)
 	{
 		options ??= new DailySummaryOptions();
-		return ReplToolResultAdapter.FromCallToolResult(
+		return ReplToolResultAdapter.FromToolResult(
 			await tools.GetDailySummaryAsync(
 				ToDateLiteral(date),
 				options.IncludeSegments,
@@ -135,7 +135,7 @@ internal static class ManicTimeReplHandlers
 		CancellationToken cancellationToken)
 	{
 		options ??= new NarrativeSummaryOptions();
-		return ReplToolResultAdapter.FromCallToolResult(
+		return ReplToolResultAdapter.FromToolResult(
 			await tools.GetActivityNarrativeAsync(
 				ToDateLiteral(period.From),
 				ToDateLiteral(period.To),
@@ -151,7 +151,7 @@ internal static class ManicTimeReplHandlers
 		[Description("Inclusive period date range.")] ReplDateRange period,
 		[FromServices] NarrativeTools tools,
 		CancellationToken cancellationToken) =>
-		ReplToolResultAdapter.FromCallToolResult(
+		ReplToolResultAdapter.FromToolResult(
 			await tools.GetPeriodSummaryAsync(
 				ToDateLiteral(period.From),
 				ToDateLiteral(period.To),

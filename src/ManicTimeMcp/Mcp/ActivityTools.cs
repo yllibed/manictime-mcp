@@ -4,13 +4,10 @@ using System.Text.Json;
 using ManicTimeMcp.Database;
 using ManicTimeMcp.Mcp.Models;
 using Microsoft.Data.Sqlite;
-using ModelContextProtocol.Protocol;
-using ModelContextProtocol.Server;
 
 namespace ManicTimeMcp.Mcp;
 
-/// <summary>MCP tools for querying ManicTime activities.</summary>
-[McpServerToolType]
+/// <summary>Operations for querying ManicTime activities.</summary>
 #pragma warning disable IL2026 // Trimming is disabled (PublishTrimmed=false); reflection-based JSON is safe
 public sealed class ActivityTools
 {
@@ -33,8 +30,8 @@ public sealed class ActivityTools
 	}
 
 	/// <summary>Returns activities for a specific timeline within a date range.</summary>
-	[McpServerTool(Name = "get_activities", ReadOnly = true), Description("Get activities for a specific timeline within a date range. Use get_timelines first to find valid timeline IDs.")]
-	public async Task<CallToolResult> GetActivitiesAsync(
+	[Description("Get activities for a specific timeline within a date range. Use get_timelines first to find valid timeline IDs.")]
+	public async Task<ToolInvocationResult> GetActivitiesAsync(
 		[Description("Timeline ID (from get_timelines)")] long timelineId,
 		[Description("Start date (ISO-8601, e.g. 2025-01-15)")] string startDate,
 		[Description("End date (ISO-8601, e.g. 2025-01-16)")] string endDate,
@@ -88,8 +85,8 @@ public sealed class ActivityTools
 	}
 
 	/// <summary>Returns computer usage activities (on/off/idle) for a date range.</summary>
-	[McpServerTool(Name = "get_computer_usage", ReadOnly = true), Description("Get computer usage (on/off/idle/locked) activities for a date range.")]
-	public async Task<CallToolResult> GetComputerUsageAsync(
+	[Description("Get computer usage (on/off/idle/locked) activities for a date range.")]
+	public async Task<ToolInvocationResult> GetComputerUsageAsync(
 		[Description("Start date (ISO-8601, e.g. 2025-01-15)")] string startDate,
 		[Description("End date (ISO-8601, e.g. 2025-01-16)")] string endDate,
 		[Description("Maximum number of results")] int? limit = null,
@@ -99,8 +96,8 @@ public sealed class ActivityTools
 	}
 
 	/// <summary>Returns tag activities for a date range.</summary>
-	[McpServerTool(Name = "get_tags", ReadOnly = true), Description("Get tag/label activities for a date range.")]
-	public async Task<CallToolResult> GetTagsAsync(
+	[Description("Get tag/label activities for a date range.")]
+	public async Task<ToolInvocationResult> GetTagsAsync(
 		[Description("Start date (ISO-8601, e.g. 2025-01-15)")] string startDate,
 		[Description("End date (ISO-8601, e.g. 2025-01-16)")] string endDate,
 		[Description("Maximum number of results")] int? limit = null,
@@ -110,8 +107,8 @@ public sealed class ActivityTools
 	}
 
 	/// <summary>Returns application usage from pre-aggregated tables (or fallback).</summary>
-	[McpServerTool(Name = "get_application_usage", ReadOnly = true), Description("Get application usage for a date range, showing daily totals per application with resolved names and colors.")]
-	public async Task<CallToolResult> GetApplicationUsageAsync(
+	[Description("Get application usage for a date range, showing daily totals per application with resolved names and colors.")]
+	public async Task<ToolInvocationResult> GetApplicationUsageAsync(
 		[Description("Start date (ISO-8601, e.g. 2025-01-15)")] string startDate,
 		[Description("End date (ISO-8601, e.g. 2025-01-16)")] string endDate,
 		[Description("Maximum number of results (default 1000, max 2000)")] int? limit = null,
@@ -163,8 +160,8 @@ public sealed class ActivityTools
 	}
 
 	/// <summary>Returns document usage from pre-aggregated tables (or fallback).</summary>
-	[McpServerTool(Name = "get_document_usage", ReadOnly = true), Description("Get document/file usage for a date range, showing daily totals per document with resolved names.")]
-	public async Task<CallToolResult> GetDocumentUsageAsync(
+	[Description("Get document/file usage for a date range, showing daily totals per document with resolved names.")]
+	public async Task<ToolInvocationResult> GetDocumentUsageAsync(
 		[Description("Start date (ISO-8601, e.g. 2025-01-15)")] string startDate,
 		[Description("End date (ISO-8601, e.g. 2025-01-16)")] string endDate,
 		[Description("Maximum number of results (default 1000, max 2000)")] int? limit = null,
@@ -215,7 +212,7 @@ public sealed class ActivityTools
 		}
 	}
 
-	private async Task<CallToolResult> GetEnrichedActivitiesResultAsync(
+	private async Task<ToolInvocationResult> GetEnrichedActivitiesResultAsync(
 		long timelineId, string startDate, string endDate,
 		string startLocal, string endLocal, int effectiveLimit,
 		CancellationToken cancellationToken)
@@ -248,7 +245,7 @@ public sealed class ActivityTools
 		}, JsonOptions.Default));
 	}
 
-	private async Task<CallToolResult> GetActivitiesBySchemaAsync(
+	private async Task<ToolInvocationResult> GetActivitiesBySchemaAsync(
 		string schemaName, string startDate, string endDate, int? limit,
 		CancellationToken cancellationToken)
 	{

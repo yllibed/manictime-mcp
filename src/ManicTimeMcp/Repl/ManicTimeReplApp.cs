@@ -437,18 +437,14 @@ public static class ManicTimeReplApp
 				IHealthService healthService,
 				ITimelineRepository timelineRepository,
 				IEnvironmentRepository environmentRepository,
-				IUsageRepository usageRepository,
-				IScreenshotRegistry screenshotRegistry,
-				IScreenshotService screenshotService) =>
+				IUsageRepository usageRepository) =>
 					ManicTimeReplHandlers.GetConfigResource(
 						CreateResources(
 							resolver,
 							healthService,
 							timelineRepository,
 							environmentRepository,
-							usageRepository,
-							screenshotRegistry,
-							screenshotService)))
+							usageRepository)))
 			.WithDescription("Read the active ManicTime configuration.")
 			.ReadOnly()
 			.AsResource();
@@ -464,8 +460,6 @@ public static class ManicTimeReplApp
 				ITimelineRepository timelineRepository,
 				IEnvironmentRepository environmentRepository,
 				IUsageRepository usageRepository,
-				IScreenshotRegistry screenshotRegistry,
-				IScreenshotService screenshotService,
 				CancellationToken cancellationToken) =>
 					ManicTimeReplHandlers.GetTimelinesResourceAsync(
 						CreateResources(
@@ -473,9 +467,7 @@ public static class ManicTimeReplApp
 							healthService,
 							timelineRepository,
 							environmentRepository,
-							usageRepository,
-							screenshotRegistry,
-							screenshotService),
+							usageRepository),
 						cancellationToken))
 			.WithDescription("Read the available timelines resource.")
 			.ReadOnly()
@@ -491,18 +483,14 @@ public static class ManicTimeReplApp
 				IHealthService healthService,
 				ITimelineRepository timelineRepository,
 				IEnvironmentRepository environmentRepository,
-				IUsageRepository usageRepository,
-				IScreenshotRegistry screenshotRegistry,
-				IScreenshotService screenshotService) =>
+				IUsageRepository usageRepository) =>
 					ManicTimeReplHandlers.GetHealthResource(
 						CreateResources(
 							resolver,
 							healthService,
 							timelineRepository,
 							environmentRepository,
-							usageRepository,
-							screenshotRegistry,
-							screenshotService)))
+							usageRepository)))
 			.WithDescription("Read the current health diagnostics resource.")
 			.ReadOnly()
 			.AsResource();
@@ -518,8 +506,6 @@ public static class ManicTimeReplApp
 				ITimelineRepository timelineRepository,
 				IEnvironmentRepository environmentRepository,
 				IUsageRepository usageRepository,
-				IScreenshotRegistry screenshotRegistry,
-				IScreenshotService screenshotService,
 				CancellationToken cancellationToken) =>
 					ManicTimeReplHandlers.GetEnvironmentResourceAsync(
 						CreateResources(
@@ -527,9 +513,7 @@ public static class ManicTimeReplApp
 							healthService,
 							timelineRepository,
 							environmentRepository,
-							usageRepository,
-							screenshotRegistry,
-							screenshotService),
+							usageRepository),
 						cancellationToken))
 			.WithDescription("Read the device and runtime environment resource.")
 			.ReadOnly()
@@ -546,8 +530,6 @@ public static class ManicTimeReplApp
 				ITimelineRepository timelineRepository,
 				IEnvironmentRepository environmentRepository,
 				IUsageRepository usageRepository,
-				IScreenshotRegistry screenshotRegistry,
-				IScreenshotService screenshotService,
 				CancellationToken cancellationToken) =>
 					ManicTimeReplHandlers.GetDataRangeResourceAsync(
 						CreateResources(
@@ -555,9 +537,7 @@ public static class ManicTimeReplApp
 							healthService,
 							timelineRepository,
 							environmentRepository,
-							usageRepository,
-							screenshotRegistry,
-							screenshotService),
+							usageRepository),
 						cancellationToken))
 			.WithDescription("Read known data boundaries per timeline.")
 			.ReadOnly()
@@ -612,8 +592,6 @@ public static class ManicTimeReplApp
 		IHealthService healthService,
 		ITimelineRepository timelineRepository,
 		IEnvironmentRepository environmentRepository,
-		IUsageRepository usageRepository,
-		IScreenshotRegistry screenshotRegistry,
-		IScreenshotService screenshotService) =>
-			new(resolver, healthService, timelineRepository, environmentRepository, usageRepository, screenshotRegistry, screenshotService);
+		IUsageRepository usageRepository) =>
+			new(resolver, healthService, timelineRepository, environmentRepository, usageRepository);
 }
