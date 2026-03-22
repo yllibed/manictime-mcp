@@ -4,8 +4,10 @@ using ManicTimeMcp.Mcp;
 using ManicTimeMcp.Screenshots;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol.Server;
 using Repl;
 using Repl.Mcp;
+using System.Reflection;
 
 namespace ManicTimeMcp.Repl;
 
@@ -17,13 +19,7 @@ public static class ManicTimeReplApp
 	{
 		var app = ReplApp.Create(ConfigureServices).UseDefaultInteractive();
 
-		app.UseMcpServer(options =>
-		{
-			options.ServerName = "ManicTime MCP";
-			options.ServerVersion = HealthService.GetServerVersion();
-			options.ResourceUriScheme = "manictime";
-			options.AutoPromoteReadOnlyToResources = false;
-		});
+		app.UseMcpServer(ConfigureMcpOptions);
 
 		MapTimelineCommands(app);
 		MapActivityCommands(app);
@@ -44,6 +40,16 @@ public static class ManicTimeReplApp
 		return Create().RunAsync(effectiveArgs, cancellationToken);
 	}
 
+	/// <summary>Builds the MCP server options from the Repl command graph.</summary>
+	public static McpServerOptions BuildMcpServerOptions()
+	{
+		var app = Create();
+		var coreProperty = typeof(ReplApp).GetProperty("Core", BindingFlags.Instance | BindingFlags.NonPublic);
+		var core = coreProperty?.GetValue(app) as ICoreReplApp
+			?? throw new InvalidOperationException("Unable to resolve the Repl core graph for MCP option building.");
+		return core.BuildMcpServerOptions(ConfigureMcpOptions);
+	}
+
 	private static void ConfigureServices(IServiceCollection services)
 	{
 		services.AddLogging(builder =>
@@ -61,6 +67,14 @@ public static class ManicTimeReplApp
 		services.AddSingleton<ActivityTools>();
 		services.AddSingleton<NarrativeTools>();
 		services.AddSingleton<ManicTimeResources>();
+	}
+
+	private static void ConfigureMcpOptions(ReplMcpServerOptions options)
+	{
+		options.ServerName = "ManicTime MCP";
+		options.ServerVersion = HealthService.GetServerVersion();
+		options.ResourceUriScheme = "manictime";
+		options.AutoPromoteReadOnlyToResources = false;
 	}
 
 	private static void MapTimelineCommands(ReplApp app)
