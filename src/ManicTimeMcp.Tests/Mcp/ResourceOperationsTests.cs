@@ -37,7 +37,8 @@ public sealed class ResourceOperationsTests
 
 		var result = resources.GetConfig();
 
-		result.Should().Contain(@"""dataDirectory"":""C:\\TestData""");
+		result.Should().NotBeNull();
+		result!["dataDirectory"]!.GetValue<string>().Should().Be(@"C:\TestData");
 	}
 
 	[TestMethod]
@@ -47,7 +48,8 @@ public sealed class ResourceOperationsTests
 
 		var result = await resources.GetTimelinesAsync(CancellationToken.None).ConfigureAwait(false);
 
-		result.Should().Contain("ManicTime/Applications");
+		result.Should().NotBeNull();
+		result!.AsArray()[0]!["schemaName"]!.GetValue<string>().Should().Be("ManicTime/Applications");
 	}
 
 	[TestMethod]
@@ -57,7 +59,8 @@ public sealed class ResourceOperationsTests
 
 		var result = await resources.GetEnvironmentAsync(CancellationToken.None).ConfigureAwait(false);
 
-		result.Should().Contain("TEST-PC");
+		result.Should().NotBeNull();
+		result!["environments"]!.AsArray()[0]!["deviceName"]!.GetValue<string>().Should().Be("TEST-PC");
 	}
 
 	[TestMethod]
@@ -67,6 +70,7 @@ public sealed class ResourceOperationsTests
 
 		var result = await resources.GetDataRangeAsync(CancellationToken.None).ConfigureAwait(false);
 
-		result.Should().Contain("timelineSummaries");
+		result.Should().NotBeNull();
+		result!["timelineSummaries"]!.AsArray().Count.Should().Be(1);
 	}
 }

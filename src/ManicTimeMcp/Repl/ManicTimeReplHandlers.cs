@@ -333,23 +333,23 @@ internal static class ManicTimeReplHandlers
 		return TryWriteScreenshotToRoots(screenshotService, bytes, roots, BuildOutputFileName(saveOptions.OutputPath, info));
 	}
 
-	public static string GetConfigResource([FromServices] ManicTimeResources resources) => resources.GetConfig();
+	public static object? GetConfigResource([FromServices] ManicTimeResources resources) => resources.GetConfig();
 
-	public static Task<string> GetTimelinesResourceAsync(
+	public static Task<System.Text.Json.Nodes.JsonNode?> GetTimelinesResourceAsync(
 		[FromServices] ManicTimeResources resources,
 		CancellationToken cancellationToken) =>
 		resources.GetTimelinesAsync(cancellationToken);
 
-	public static string GetHealthResource([FromServices] ManicTimeResources resources) => resources.GetHealth();
+	public static object? GetHealthResource([FromServices] ManicTimeResources resources) => resources.GetHealth();
 
 	public static string GetGuideResource() => GuideContent.Text;
 
-	public static Task<string> GetEnvironmentResourceAsync(
+	public static Task<System.Text.Json.Nodes.JsonNode?> GetEnvironmentResourceAsync(
 		[FromServices] ManicTimeResources resources,
 		CancellationToken cancellationToken) =>
 		resources.GetEnvironmentAsync(cancellationToken);
 
-	public static Task<string> GetDataRangeResourceAsync(
+	public static Task<System.Text.Json.Nodes.JsonNode?> GetDataRangeResourceAsync(
 		[FromServices] ManicTimeResources resources,
 		CancellationToken cancellationToken) =>
 		resources.GetDataRangeAsync(cancellationToken);

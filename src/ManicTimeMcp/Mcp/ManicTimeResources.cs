@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ManicTimeMcp.Configuration;
 using ManicTimeMcp.Database;
 using ManicTimeMcp.Screenshots;
@@ -33,10 +34,10 @@ public sealed class ManicTimeResources
 
 	/// <summary>Returns the current ManicTime configuration.</summary>
 	[Description("ManicTime MCP server configuration including data directory and source.")]
-	public string GetConfig()
+	public JsonNode? GetConfig()
 	{
 		var result = _resolver.Resolve();
-		return JsonSerializer.Serialize(new
+		return JsonSerializer.SerializeToNode(new
 		{
 			dataDirectory = result.Path,
 			directorySource = result.Source.ToString(),
@@ -45,18 +46,18 @@ public sealed class ManicTimeResources
 
 	/// <summary>Returns available ManicTime timelines.</summary>
 	[Description("List of all ManicTime timelines with schema types.")]
-	public async Task<string> GetTimelinesAsync(CancellationToken cancellationToken)
+	public async Task<JsonNode?> GetTimelinesAsync(CancellationToken cancellationToken)
 	{
 		var timelines = await _timelineRepository.GetTimelinesAsync(cancellationToken).ConfigureAwait(false);
-		return JsonSerializer.Serialize(timelines, JsonOptions.Default);
+		return JsonSerializer.SerializeToNode(timelines, JsonOptions.Default);
 	}
 
 	/// <summary>Returns the current health diagnostic report.</summary>
 	[Description("Health diagnostic report for the ManicTime MCP environment.")]
-	public string GetHealth()
+	public JsonNode? GetHealth()
 	{
 		var report = _healthService.GetHealthReport();
-		return JsonSerializer.Serialize(report, JsonOptions.Default);
+		return JsonSerializer.SerializeToNode(report, JsonOptions.Default);
 	}
 
 	/// <summary>Returns the model usage guide.</summary>
@@ -65,18 +66,18 @@ public sealed class ManicTimeResources
 
 	/// <summary>Returns device and runtime environment information.</summary>
 	[Description("Device and runtime information from ManicTime environment data.")]
-	public async Task<string> GetEnvironmentAsync(CancellationToken cancellationToken)
+	public async Task<JsonNode?> GetEnvironmentAsync(CancellationToken cancellationToken)
 	{
 		var environments = await _environmentRepository.GetEnvironmentsAsync(cancellationToken).ConfigureAwait(false);
-		return JsonSerializer.Serialize(new { environments }, JsonOptions.Default);
+		return JsonSerializer.SerializeToNode(new { environments }, JsonOptions.Default);
 	}
 
 	/// <summary>Returns available data date ranges from timeline summaries.</summary>
 	[Description("Available data date ranges per timeline. Useful for knowing data boundaries without querying activities.")]
-	public async Task<string> GetDataRangeAsync(CancellationToken cancellationToken)
+	public async Task<JsonNode?> GetDataRangeAsync(CancellationToken cancellationToken)
 	{
 		var summaries = await _usageRepository.GetTimelineSummariesAsync(cancellationToken).ConfigureAwait(false);
-		return JsonSerializer.Serialize(new { timelineSummaries = summaries }, JsonOptions.Default);
+		return JsonSerializer.SerializeToNode(new { timelineSummaries = summaries }, JsonOptions.Default);
 	}
 }
 #pragma warning restore IL2026
