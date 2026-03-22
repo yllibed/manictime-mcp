@@ -11,10 +11,26 @@ A .NET [MCP](https://modelcontextprotocol.io) server that gives AI agents read-o
 Requires the [.NET 10+ SDK](https://dotnet.microsoft.com/download/dotnet). Run directly with `dnx` — no install step needed:
 
 ```bash
-dnx -y ManicTimeMcp
+dnx -y ManicTimeMcp mcp serve
 ```
 
 This downloads the latest version and starts the server over **stdio**. It expects a local ManicTime Windows desktop installation with local storage.
+
+## Local development modes
+
+Use the project directly while developing:
+
+```bash
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- mcp serve
+```
+
+Use the same app as a CLI or interactive REPL:
+
+```bash
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj
+```
+
+The `--` is required with `dotnet run` because it separates `dotnet` launcher arguments from the app's own `mcp serve` command path.
 
 ## Agent configuration
 
@@ -30,7 +46,7 @@ Or add manually to `.vscode/mcp.json`:
     "manictime-mcp": {
       "type": "stdio",
       "command": "dnx",
-      "args": ["-y", "ManicTimeMcp"]
+      "args": ["-y", "ManicTimeMcp", "mcp", "serve"]
     }
   }
 }
@@ -39,7 +55,7 @@ Or add manually to `.vscode/mcp.json`:
 ### Claude Code
 
 ```bash
-claude mcp add manictime-mcp -- dnx -y ManicTimeMcp
+claude mcp add manictime-mcp -- dnx -y ManicTimeMcp mcp serve
 ```
 
 ### Claude Desktop
@@ -51,7 +67,7 @@ Add to `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.jso
   "mcpServers": {
     "manictime-mcp": {
       "command": "dnx",
-      "args": ["-y", "ManicTimeMcp"]
+      "args": ["-y", "ManicTimeMcp", "mcp", "serve"]
     }
   }
 }
@@ -60,7 +76,7 @@ Add to `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.jso
 ### OpenAI Codex CLI
 
 ```bash
-codex mcp add manictime-mcp -- dnx -y ManicTimeMcp
+codex mcp add manictime-mcp -- dnx -y ManicTimeMcp mcp serve
 ```
 
 ### Generic MCP JSON configuration
@@ -72,7 +88,7 @@ For any MCP-compatible client that accepts a JSON config:
   "mcpServers": {
     "manictime-mcp": {
       "command": "dnx",
-      "args": ["-y", "ManicTimeMcp"],
+      "args": ["-y", "ManicTimeMcp", "mcp", "serve"],
       "transportType": "stdio"
     }
   }

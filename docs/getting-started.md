@@ -24,6 +24,22 @@ dotnet pack src/ManicTimeMcp.slnx -c Release
 - The test runner is Microsoft Testing Platform (MTP), configured in the `"test"` section of `global.json`.
 - Engineering target is zero warnings as much as practical; warnings are treated as errors by default.
 
+## Local launch modes
+
+Start the MCP server during local development:
+
+```bash
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- mcp serve
+```
+
+Run the same app as a local CLI or interactive REPL:
+
+```bash
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj
+```
+
+`dotnet run` requires the `--` separator before `mcp serve` so the command is forwarded to the Repl app instead of being parsed by the `dotnet` launcher.
+
 ## Data Safety (Mandatory)
 
 - Treat ManicTime artifacts as high-value user data.

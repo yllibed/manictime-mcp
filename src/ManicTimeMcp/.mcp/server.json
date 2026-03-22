@@ -11,6 +11,22 @@
 		{
 			"registryType": "nuget",
 			"identifier": "ManicTimeMcp",
+			"runtimeArguments": [
+				{
+					"type": "positional",
+					"value": "-y"
+				}
+			],
+			"packageArguments": [
+				{
+					"type": "positional",
+					"value": "mcp"
+				},
+				{
+					"type": "positional",
+					"value": "serve"
+				}
+			],
 			"transport": {
 				"type": "stdio"
 			},
