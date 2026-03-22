@@ -309,61 +309,29 @@ public sealed class ScreenshotToolsV2
 
 	private CallToolResult BuildGetResult(ScreenshotInfo info)
 	{
-		var content = new List<ContentBlock>();
 		var thumbnailPath = info.IsThumbnail ? info.FilePath : GetThumbnailPath(info.FilePath);
 		var fullPath = info.IsThumbnail ? GetFullSizePath(info.FilePath) : info.FilePath;
-		var bothAudience = new Annotations { Audience = [Role.User, Role.Assistant] };
-		var userOnly = new Annotations { Audience = [Role.User] };
 
-		// Read thumbnail for model reasoning
 		var thumbnailBytes = thumbnailPath is not null ? _screenshotService.ReadScreenshot(thumbnailPath) : null;
 		var fullBytes = fullPath is not null ? _screenshotService.ReadScreenshot(fullPath) : null;
-
-		if (thumbnailBytes is not null && fullBytes is not null)
+		var selectedBytes = fullBytes ?? thumbnailBytes;
+		if (selectedBytes is null)
 		{
-			// Dual-audience: thumbnail for model + full for human
-			content.Add(new ImageContentBlock
-			{
-				Data = Convert.ToBase64String(thumbnailBytes),
-				MimeType = "image/jpeg",
-				Annotations = bothAudience,
-			});
-			content.Add(new ImageContentBlock
-			{
-				Data = Convert.ToBase64String(fullBytes),
-				MimeType = "image/jpeg",
-				Annotations = userOnly,
-			});
-		}
-		else
-		{
-			// Single image available — both audiences see it
-			var bytes = thumbnailBytes ?? fullBytes;
-			if (bytes is not null)
-			{
-				content.Add(new ImageContentBlock
-				{
-					Data = Convert.ToBase64String(bytes),
-					MimeType = "image/jpeg",
-					Annotations = bothAudience,
-				});
-			}
+			return ToolResults.Error("Screenshot file not found or inaccessible.");
 		}
 
-		content.Add(new TextContentBlock
+		return ToolResults.Success(JsonSerializer.Serialize(new
 		{
-			Text = JsonSerializer.Serialize(new
-			{
-				screenshotRef = info.Ref,
-				timestamp = info.LocalTimestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
-				info.Width,
-				info.Height,
-				info.Monitor,
-				isThumbnail = info.IsThumbnail,
-			}, JsonOptions.Default),
-		});
-
-		return new CallToolResult { Content = content };
+			screenshotRef = info.Ref,
+			timestamp = info.LocalTimestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+			info.Width,
+			info.Height,
+			info.Monitor,
+			isThumbnail = info.IsThumbnail,
+			thumbnailBase64 = thumbnailBytes is null ? null : Convert.ToBase64String(thumbnailBytes),
+			imageBase64 = Convert.ToBase64String(selectedBytes),
+			imageFormat = "image/jpeg",
+		}, JsonOptions.Default));
 	}
 
 	private CallToolResult BuildCropResult(
@@ -388,25 +356,13 @@ public sealed class ScreenshotToolsV2
 			return ToolResults.Error("Crop failed. The image may be corrupted or the region is invalid.");
 		}
 
-		var content = new List<ContentBlock>
+		return ToolResults.Success(JsonSerializer.Serialize(new
 		{
-			new ImageContentBlock
-			{
-				Data = Convert.ToBase64String(cropped),
-				MimeType = "image/jpeg",
-				Annotations = new Annotations { Audience = [Role.User, Role.Assistant] },
-			},
-			new TextContentBlock
-			{
-				Text = JsonSerializer.Serialize(new
-				{
-					screenshotRef = info.Ref,
-					crop = new { x, y, width = w, height = h, units = units.ToString().ToLowerInvariant() },
-				}, JsonOptions.Default),
-			},
-		};
-
-		return new CallToolResult { Content = content };
+			screenshotRef = info.Ref,
+			crop = new { x, y, width = w, height = h, units = units.ToString().ToLowerInvariant() },
+			imageBase64 = Convert.ToBase64String(cropped),
+			imageFormat = "image/jpeg",
+		}, JsonOptions.Default));
 	}
 
 	private static (DateTime Start, DateTime End) ParseDates(string startDate, string endDate)

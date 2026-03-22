@@ -45,6 +45,8 @@
 		<PackageReference Include="ModelContextProtocol" />
 		<PackageReference Include="Microsoft.Data.Sqlite" />
 		<PackageReference Include="Microsoft.Extensions.Hosting" />
+		<PackageReference Include="Repl" />
+		<PackageReference Include="Repl.Mcp" />
 		<PackageReference Include="SkiaSharp" />
 	</ItemGroup>
 

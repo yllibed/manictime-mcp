@@ -11,14 +11,17 @@
 	</ItemGroup>
 
 	<ItemGroup Label="Runtime dependencies">
-		<PackageVersion Include="ModelContextProtocol" Version="0.8.0-preview.1" />
+		<PackageVersion Include="ModelContextProtocol" Version="1.1.0" />
 		<PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.3" />
-		<PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+		<PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.3" />
+		<PackageVersion Include="Repl" Version="0.9.2-dev.82" />
+		<PackageVersion Include="Repl.Mcp" Version="0.9.2-dev.82" />
 		<PackageVersion Include="SkiaSharp" Version="3.119.2" />
 	</ItemGroup>
 
 	<ItemGroup Label="Test dependencies">
 		<PackageVersion Include="AwesomeAssertions" Version="9.3.0" />
+		<PackageVersion Include="Repl.Testing" Version="0.9.2-dev.82" />
 	</ItemGroup>
 
 	<ItemGroup Label="Benchmark dependencies">

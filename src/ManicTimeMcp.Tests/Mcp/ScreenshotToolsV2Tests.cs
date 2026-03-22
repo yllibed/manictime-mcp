@@ -173,7 +173,7 @@ public sealed class ScreenshotToolsV2Tests
 	}
 
 	[TestMethod]
-	public async Task GetScreenshot_WithRegisteredRef_ReturnsImageContentBlocks()
+	public async Task GetScreenshot_WithRegisteredRef_ReturnsJsonPayload()
 	{
 		// Pre-register a screenshot in the registry
 		var registry = new ScreenshotRegistry();
@@ -198,18 +198,10 @@ public sealed class ScreenshotToolsV2Tests
 			}).ConfigureAwait(false);
 
 		result.IsError.Should().NotBeTrue();
-
-		// Should have at least one ImageContentBlock and one TextContentBlock
-		var images = result.Content.OfType<ImageContentBlock>().ToList();
-		images.Should().NotBeEmpty();
-		images[0].MimeType.Should().Be("image/jpeg");
-		images[0].Annotations.Should().NotBeNull();
-		var audience = images[0].Annotations!.Audience!;
-		audience.Should().Contain(Role.User);
-		audience.Should().Contain(Role.Assistant);
-
-		var textBlocks = result.Content.OfType<TextContentBlock>().ToList();
-		textBlocks.Should().HaveCount(1);
+		var text = result.Content.OfType<TextContentBlock>().Single().Text;
+		var doc = JsonDocument.Parse(text);
+		doc.RootElement.GetProperty("imageBase64").GetString().Should().NotBeNullOrEmpty();
+		doc.RootElement.GetProperty("imageFormat").GetString().Should().Be("image/jpeg");
 	}
 
 	[TestMethod]
@@ -234,7 +226,7 @@ public sealed class ScreenshotToolsV2Tests
 	}
 
 	[TestMethod]
-	public async Task CropScreenshot_WithRegisteredRef_ReturnsImageAndMetadata()
+	public async Task CropScreenshot_WithRegisteredRef_ReturnsJsonPayload()
 	{
 		var registry = new ScreenshotRegistry();
 		var refId = registry.Register(SampleFullSize);
@@ -263,19 +255,10 @@ public sealed class ScreenshotToolsV2Tests
 			}).ConfigureAwait(false);
 
 		result.IsError.Should().NotBeTrue();
-
-		var images = result.Content.OfType<ImageContentBlock>().ToList();
-		images.Should().HaveCount(1);
-		images[0].MimeType.Should().Be("image/jpeg");
-		images[0].Annotations.Should().NotBeNull();
-		var cropAudience = images[0].Annotations!.Audience!;
-		cropAudience.Should().Contain(Role.User);
-		cropAudience.Should().Contain(Role.Assistant);
-
-		var textBlocks = result.Content.OfType<TextContentBlock>().ToList();
-		textBlocks.Should().HaveCount(1);
-		var doc = JsonDocument.Parse(textBlocks[0].Text);
+		var text = result.Content.OfType<TextContentBlock>().Single().Text;
+		var doc = JsonDocument.Parse(text);
 		doc.RootElement.GetProperty("crop").GetProperty("x").GetDouble().Should().Be(10);
+		doc.RootElement.GetProperty("imageBase64").GetString().Should().NotBeNullOrEmpty();
 	}
 
 	[TestMethod]

@@ -110,7 +110,7 @@ public sealed class ManicTimeResources
 			yield return new BlobResourceContents
 			{
 				Uri = $"manictime://screenshot/{screenshotRef}",
-				Blob = Convert.ToBase64String(bytes),
+				Blob = bytes,
 				MimeType = "image/jpeg",
 			};
 		}
