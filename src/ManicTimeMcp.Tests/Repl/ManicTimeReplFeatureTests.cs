@@ -68,7 +68,7 @@ public sealed class ManicTimeReplFeatureTests
 	[TestMethod]
 	public async Task McpSurface_UsesInjectedRepositoriesForTimelineAndActivityQueries()
 	{
-		var app = CreateApp(services =>
+		await using var harness = await CreateHarnessAsync(services =>
 		{
 			services.AddSingleton<ITimelineRepository>(new StubTimelineRepository(SampleTimelines));
 			services.AddSingleton<IActivityRepository>(new StubActivityRepository(SampleActivities));
@@ -76,9 +76,7 @@ public sealed class ManicTimeReplFeatureTests
 			services.AddSingleton(CreateFullCapabilities());
 			services.AddSingleton<IScreenshotRegistry, ScreenshotRegistry>();
 			services.AddSingleton<IScreenshotService>(new StubScreenshotService());
-		});
-
-		await using var harness = await ReplMcpTestHarness.CreateAsync(() => app).ConfigureAwait(false);
+		}).ConfigureAwait(false);
 
 		var timelineResult = await harness.Client.CallToolAsync(
 			"timeline_list",
@@ -106,7 +104,7 @@ public sealed class ManicTimeReplFeatureTests
 	[TestMethod]
 	public async Task McpResources_ReadInjectedEnvironmentAndDataRange()
 	{
-		var app = CreateApp(services =>
+		await using var harness = await CreateHarnessAsync(services =>
 		{
 			services.AddSingleton<IDataDirectoryResolver>(new StubDataDirectoryResolver(@"C:\TestData"));
 			services.AddSingleton<IHealthService>(new StubHealthService());
@@ -115,9 +113,7 @@ public sealed class ManicTimeReplFeatureTests
 			services.AddSingleton<IUsageRepository>(new StubUsageRepository(summaries: SampleSummaries));
 			services.AddSingleton<IScreenshotRegistry, ScreenshotRegistry>();
 			services.AddSingleton<IScreenshotService>(new StubScreenshotService());
-		});
-
-		await using var harness = await ReplMcpTestHarness.CreateAsync(() => app).ConfigureAwait(false);
+		}).ConfigureAwait(false);
 
 		var configResult = await harness.Client.ReadResourceAsync("manictime://resource/config").ConfigureAwait(false);
 		var environmentResult = await harness.Client.ReadResourceAsync("manictime://resource/environment").ConfigureAwait(false);
@@ -143,21 +139,21 @@ public sealed class ManicTimeReplFeatureTests
 
 		try
 		{
-			var clientRoots = new TestMcpClientRoots();
-			clientRoots.SetSoftRoots(
-			[
-				new McpClientRoot(new Uri(rootDirectory + Path.DirectorySeparatorChar), "temp-root"),
-			]);
-
-			var app = CreateApp(services =>
+			await using var harness = await CreateHarnessAsync(services =>
 			{
 				services.AddSingleton<IScreenshotRegistry>(registry);
 				services.AddSingleton<IScreenshotService>(new StubScreenshotService(readResult: ScreenshotBytes, writeResult: ScreenshotBytes.Length));
 				services.AddSingleton<ICropService>(new StubCropService());
-				services.AddSingleton<IMcpClientRoots>(clientRoots);
-			});
+			}).ConfigureAwait(false);
 
-			await using var harness = await ReplMcpTestHarness.CreateAsync(() => app).ConfigureAwait(false);
+			var initResult = await harness.Client.CallToolAsync(
+				"workspace_init",
+				new Dictionary<string, object?>(StringComparer.Ordinal)
+				{
+					["path"] = rootDirectory,
+				}).ConfigureAwait(false);
+
+			initResult.IsError.Should().NotBeTrue(because: DescribeCallResult(initResult));
 
 			var result = await harness.Client.CallToolAsync(
 				"screenshot_save",
@@ -167,7 +163,7 @@ public sealed class ManicTimeReplFeatureTests
 					["outputPath"] = @"assets\focus",
 				}).ConfigureAwait(false);
 
-			result.IsError.Should().NotBeTrue();
+			result.IsError.Should().NotBeTrue(because: DescribeCallResult(result));
 			var doc = ParseSingleTextPayload(result);
 			doc.RootElement.GetProperty("path").GetString().Should().StartWith(rootDirectory);
 			doc.RootElement.GetProperty("path").GetString().Should().EndWith("focus.jpg");
@@ -185,7 +181,7 @@ public sealed class ManicTimeReplFeatureTests
 	[TestMethod]
 	public async Task ScreenshotList_OmitsBrokenScreenshotResourceUri()
 	{
-		var app = CreateApp(services =>
+		await using var harness = await CreateHarnessAsync(services =>
 		{
 			services.AddSingleton<IScreenshotRegistry, ScreenshotRegistry>();
 			services.AddSingleton<IScreenshotService>(new StubScreenshotService(
@@ -196,9 +192,7 @@ public sealed class ManicTimeReplFeatureTests
 					IsTruncated = false,
 					SamplingStrategyUsed = SamplingStrategy.Interval,
 				}));
-		});
-
-		await using var harness = await ReplMcpTestHarness.CreateAsync(() => app).ConfigureAwait(false);
+		}).ConfigureAwait(false);
 
 		var result = await harness.Client.CallToolAsync(
 			"screenshot_list",
@@ -219,16 +213,14 @@ public sealed class ManicTimeReplFeatureTests
 	{
 		var registry = new ScreenshotRegistry();
 		var screenshotRef = registry.Register(SampleScreenshot);
-		var app = CreateApp(services =>
+		await using var harness = await CreateHarnessAsync(services =>
 		{
 			services.AddSingleton<IScreenshotRegistry>(registry);
 			services.AddSingleton<IScreenshotService>(new StubScreenshotService(
 				readScreenshot: static filePath => filePath.Contains(".thumbnail.", StringComparison.OrdinalIgnoreCase)
 					? ThumbnailBytes
 					: FullSizeBytes));
-		});
-
-		await using var harness = await ReplMcpTestHarness.CreateAsync(() => app).ConfigureAwait(false);
+		}).ConfigureAwait(false);
 
 		var result = await harness.Client.CallToolAsync(
 			"screenshot_get",
@@ -244,13 +236,78 @@ public sealed class ManicTimeReplFeatureTests
 		doc.RootElement.GetProperty("imageBase64").GetString().Should().Be(Convert.ToBase64String(ThumbnailBytes));
 	}
 
+	[TestMethod]
+	public async Task ScreenshotSave_PartialCropOptions_ReturnsValidationError()
+	{
+		var registry = new ScreenshotRegistry();
+		var screenshotRef = registry.Register(SampleScreenshot);
+		await using var harness = await CreateHarnessAsync(services =>
+		{
+			services.AddSingleton<IScreenshotRegistry>(registry);
+			services.AddSingleton<IScreenshotService>(new StubScreenshotService(readResult: ScreenshotBytes, writeResult: ScreenshotBytes.Length));
+			services.AddSingleton<ICropService>(new StubCropService());
+		}).ConfigureAwait(false);
+
+		var result = await harness.Client.CallToolAsync(
+			"screenshot_save",
+			new Dictionary<string, object?>(StringComparer.Ordinal)
+			{
+				["screenshotRef"] = screenshotRef,
+				["cropX"] = 10d,
+				["cropY"] = 15d,
+				["cropWidth"] = 25d,
+			}).ConfigureAwait(false);
+
+		result.IsError.Should().BeTrue();
+		var doc = ParseSingleTextPayload(result);
+		doc.RootElement.GetProperty("kind").GetString().Should().Be("validation");
+		doc.RootElement.GetProperty("message").GetString().Should().Contain("Provide either all crop values");
+	}
+
+	[TestMethod]
+	public async Task ScreenshotSave_WithoutRoots_ReturnsMcpRootsRequired()
+	{
+		var registry = new ScreenshotRegistry();
+		var screenshotRef = registry.Register(SampleScreenshot);
+		await using var harness = await CreateHarnessAsync(services =>
+		{
+			services.AddSingleton<IScreenshotRegistry>(registry);
+			services.AddSingleton<IScreenshotService>(new StubScreenshotService(readResult: ScreenshotBytes, writeResult: ScreenshotBytes.Length));
+			services.AddSingleton<ICropService>(new StubCropService());
+		}).ConfigureAwait(false);
+
+		var result = await harness.Client.CallToolAsync(
+			"screenshot_save",
+			new Dictionary<string, object?>(StringComparer.Ordinal)
+			{
+				["screenshotRef"] = screenshotRef,
+			}).ConfigureAwait(false);
+
+		result.IsError.Should().BeTrue();
+		var doc = ParseSingleTextPayload(result);
+		doc.RootElement.GetProperty("code").GetString().Should().Be("mcp_roots_required");
+	}
+
 	private static ReplApp CreateApp(Action<IServiceCollection>? configureServices = null) =>
 		ManicTimeReplApp.Create(configureServices);
+
+	private static Task<ReplMcpTestHarness> CreateHarnessAsync(Action<IServiceCollection>? configureServices = null) =>
+		ReplMcpTestHarness.CreateAsync(() => CreateApp(configureServices));
 
 	private static JsonDocument ParseSingleTextPayload(ModelContextProtocol.Protocol.CallToolResult result)
 	{
 		var text = result.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>().Single().Text;
 		return ParseJsonPayload(text);
+	}
+
+	private static string DescribeCallResult(ModelContextProtocol.Protocol.CallToolResult result)
+	{
+		var payload = string.Join(
+			Environment.NewLine,
+			result.Content
+				.OfType<ModelContextProtocol.Protocol.TextContentBlock>()
+				.Select(static block => block.Text));
+		return string.IsNullOrWhiteSpace(payload) ? "<no text payload>" : payload;
 	}
 
 	private static JsonDocument ParseJsonPayload(string text)

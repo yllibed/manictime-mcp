@@ -3,6 +3,7 @@ using ManicTimeMcp.Mcp;
 using ManicTimeMcp.Repl;
 using Microsoft.Extensions.DependencyInjection;
 using Repl.Testing;
+using Repl.Mcp;
 
 namespace ManicTimeMcp.Tests.Repl;
 
@@ -20,6 +21,7 @@ public sealed class ManicTimeReplAppTests
 		model.Contexts.Should().Contain(context => string.Equals(context.Path, "usage", StringComparison.Ordinal));
 		model.Contexts.Should().Contain(context => string.Equals(context.Path, "summary", StringComparison.Ordinal));
 		model.Contexts.Should().Contain(context => string.Equals(context.Path, "screenshot", StringComparison.Ordinal));
+		model.Contexts.Should().Contain(context => string.Equals(context.Path, "workspace", StringComparison.Ordinal));
 		model.Contexts.Should().Contain(context => string.Equals(context.Path, "resource", StringComparison.Ordinal));
 		model.Contexts.Should().Contain(context => string.Equals(context.Path, "prompt", StringComparison.Ordinal));
 
@@ -53,13 +55,14 @@ public sealed class ManicTimeReplAppTests
 	public void SharedServiceProvider_ResolvesModulesAndTransportNeutralServices()
 	{
 		var app = ManicTimeReplApp.Create();
-		var services = ManicTimeReplApp.GetServiceProvider(app);
+		var services = app.Services;
 
 		services.GetRequiredService<TimelineModule>().Should().NotBeNull();
 		services.GetRequiredService<ActivityModule>().Should().NotBeNull();
 		services.GetRequiredService<UsageModule>().Should().NotBeNull();
 		services.GetRequiredService<SummaryModule>().Should().NotBeNull();
 		services.GetRequiredService<ScreenshotModule>().Should().NotBeNull();
+		services.GetRequiredService<WorkspaceModule>().Should().NotBeNull();
 		services.GetRequiredService<ResourceModule>().Should().NotBeNull();
 		services.GetRequiredService<PromptModule>().Should().NotBeNull();
 
@@ -67,6 +70,7 @@ public sealed class ManicTimeReplAppTests
 		services.GetRequiredService<ActivityTools>().Should().NotBeNull();
 		services.GetRequiredService<NarrativeTools>().Should().NotBeNull();
 		services.GetRequiredService<ManicTimeResources>().Should().NotBeNull();
+		services.GetRequiredService<IMcpClientRoots>().Should().NotBeNull();
 	}
 
 	[TestMethod]

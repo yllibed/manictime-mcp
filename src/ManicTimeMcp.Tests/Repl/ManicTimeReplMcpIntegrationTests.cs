@@ -9,7 +9,8 @@ public sealed class ManicTimeReplMcpIntegrationTests
 	[TestMethod]
 	public async Task ToolList_ContainsExpectedReplTools()
 	{
-		await using var harness = await ReplMcpTestHarness.CreateAsync(appFactory: () => ManicTimeReplApp.Create()).ConfigureAwait(false);
+		await using var harness = await ReplMcpTestHarness.CreateAsync(
+			appFactory: static () => ManicTimeReplApp.Create()).ConfigureAwait(false);
 
 		var tools = await harness.Client.ListToolsAsync().ConfigureAwait(false);
 		var names = tools.Select(tool => tool.Name).ToList();
@@ -25,7 +26,8 @@ public sealed class ManicTimeReplMcpIntegrationTests
 	[TestMethod]
 	public async Task ResourceAndPromptDiscovery_ExposeGuideAndDailyReview()
 	{
-		await using var harness = await ReplMcpTestHarness.CreateAsync(appFactory: () => ManicTimeReplApp.Create()).ConfigureAwait(false);
+		await using var harness = await ReplMcpTestHarness.CreateAsync(
+			appFactory: static () => ManicTimeReplApp.Create()).ConfigureAwait(false);
 
 		var resources = await harness.Client.ListResourcesAsync().ConfigureAwait(false);
 		var prompts = await harness.Client.ListPromptsAsync().ConfigureAwait(false);
@@ -37,11 +39,12 @@ public sealed class ManicTimeReplMcpIntegrationTests
 	[TestMethod]
 	public async Task PromptGet_ReturnsReplFirstInstructions()
 	{
-		await using var harness = await ReplMcpTestHarness.CreateAsync(appFactory: () => ManicTimeReplApp.Create()).ConfigureAwait(false);
+		await using var harness = await ReplMcpTestHarness.CreateAsync(
+			appFactory: static () => ManicTimeReplApp.Create()).ConfigureAwait(false);
 
 		var result = await harness.Client.GetPromptAsync(
-			"prompt_daily-review",
-			new Dictionary<string, object?>(StringComparer.Ordinal)
+			name: "prompt_daily-review",
+			arguments: new Dictionary<string, object?>(StringComparer.Ordinal)
 			{
 				["date"] = "2025-01-15",
 			}).ConfigureAwait(false);

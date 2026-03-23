@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Globalization;
+using System.Linq;
 using ManicTimeMcp.Mcp;
 using ManicTimeMcp.Screenshots;
 using Repl;
@@ -293,7 +294,7 @@ internal static class ManicTimeReplHandlers
 		[FromServices] IScreenshotRegistry registry,
 		[FromServices] IScreenshotService screenshotService,
 		[FromServices] ICropService cropService,
-		[FromServices] IServiceProvider services,
+		[FromServices] IMcpClientRoots clientRoots,
 		CancellationToken cancellationToken)
 	{
 		saveOptions ??= new ScreenshotSaveOptions();
@@ -310,16 +311,9 @@ internal static class ManicTimeReplHandlers
 			return Results.NotFound("Screenshot file not found or inaccessible.");
 		}
 
-		if (HasCrop(cropOptions))
+		if (TryCreateCropRegion(cropOptions, out var cropRegion, out var validationFailure))
 		{
-			var cropped = cropService.Crop(bytes, new CropRegion
-			{
-				X = cropOptions.CropX!.Value,
-				Y = cropOptions.CropY!.Value,
-				Width = cropOptions.CropWidth!.Value,
-				Height = cropOptions.CropHeight!.Value,
-				Units = ParseCoordinateUnits(cropOptions.CoordinateUnits),
-			});
+			var cropped = cropService.Crop(bytes, cropRegion!);
 			if (cropped is null)
 			{
 				return Results.Validation("Crop failed. The crop region may be invalid or the source image unreadable.");
@@ -327,9 +321,55 @@ internal static class ManicTimeReplHandlers
 
 			bytes = cropped;
 		}
+		else if (validationFailure is not null)
+		{
+			return Results.Validation(validationFailure);
+		}
 
-		var roots = await ResolveRootsAsync(services, cancellationToken).ConfigureAwait(false);
+		var roots = await ResolveRootsAsync(clientRoots, cancellationToken).ConfigureAwait(false);
 		return TryWriteScreenshotToRoots(screenshotService, bytes, roots, BuildOutputFileName(saveOptions.OutputPath, info));
+	}
+
+	public static object InitializeWorkspaceRoots(
+		[Description("Absolute directory path that should become the session workspace root.")] string path,
+		[FromServices] IMcpClientRoots clientRoots)
+	{
+		if (string.IsNullOrWhiteSpace(path))
+		{
+			return Results.Validation("Workspace path is required.");
+		}
+
+		if (!Path.IsPathRooted(path))
+		{
+			return Results.Validation("Workspace path must be absolute.");
+		}
+
+		var fullPath = Path.GetFullPath(path);
+		if (!Directory.Exists(fullPath))
+		{
+			return Results.Validation($"Workspace path '{fullPath}' does not exist.");
+		}
+
+		var normalizedPath = Path.EndsInDirectorySeparator(fullPath)
+			? fullPath
+			: fullPath + Path.DirectorySeparatorChar;
+		var displayName = Path.GetFileName(fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+		if (string.IsNullOrWhiteSpace(displayName))
+		{
+			displayName = fullPath;
+		}
+
+		clientRoots.SetSoftRoots(
+		[
+			new McpClientRoot(new Uri(normalizedPath, UriKind.Absolute), displayName),
+		]);
+
+		return new
+		{
+			path = fullPath,
+			name = displayName,
+			mode = clientRoots.IsSupported ? "native-plus-soft" : "soft-roots",
+		};
 	}
 
 	public static object? GetConfigResource([FromServices] ManicTimeResources resources) => resources.GetConfig();
@@ -384,15 +424,9 @@ internal static class ManicTimeReplHandlers
 	}
 
 	private static async Task<IReadOnlyList<McpClientRoot>> ResolveRootsAsync(
-		IServiceProvider services,
+		IMcpClientRoots clientRoots,
 		CancellationToken cancellationToken)
 	{
-		var clientRoots = services.GetService(typeof(IMcpClientRoots)) as IMcpClientRoots;
-		if (clientRoots is null)
-		{
-			return [];
-		}
-
 		var roots = await clientRoots.GetAsync(cancellationToken).ConfigureAwait(false);
 		if (roots.Count > 0)
 		{
@@ -452,11 +486,44 @@ internal static class ManicTimeReplHandlers
 		return Results.Validation($"Output path '{relativePath}' does not resolve inside any declared MCP root.");
 	}
 
-	private static bool HasCrop(ScreenshotCropOptions options) =>
-		options.CropX.HasValue
-		&& options.CropY.HasValue
-		&& options.CropWidth.HasValue
-		&& options.CropHeight.HasValue;
+	private static bool TryCreateCropRegion(
+		ScreenshotCropOptions options,
+		out CropRegion? cropRegion,
+		out string? validationFailure)
+	{
+		var cropValues = new[]
+		{
+			options.CropX.HasValue,
+			options.CropY.HasValue,
+			options.CropWidth.HasValue,
+			options.CropHeight.HasValue,
+		};
+
+		if (cropValues.All(static value => !value))
+		{
+			cropRegion = default;
+			validationFailure = null;
+			return false;
+		}
+
+		if (cropValues.Any(static value => !value))
+		{
+			cropRegion = default;
+			validationFailure = "Provide either all crop values (cropX, cropY, cropWidth, cropHeight) or none of them.";
+			return false;
+		}
+
+		cropRegion = new CropRegion
+		{
+			X = options.CropX!.Value,
+			Y = options.CropY!.Value,
+			Width = options.CropWidth!.Value,
+			Height = options.CropHeight!.Value,
+			Units = ParseCoordinateUnits(options.CoordinateUnits),
+		};
+		validationFailure = null;
+		return true;
+	}
 
 	private static string ToDateLiteral(DateOnly date) =>
 		date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);

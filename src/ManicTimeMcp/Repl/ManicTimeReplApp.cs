@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using Repl;
 using Repl.Mcp;
-using System.Reflection;
 
 namespace ManicTimeMcp.Repl;
 
@@ -25,6 +24,7 @@ public static class ManicTimeReplApp
 		app.MapModule<UsageModule>();
 		app.MapModule<SummaryModule>();
 		app.MapModule<ScreenshotModule>();
+		app.MapModule<WorkspaceModule>();
 		app.MapModule<ResourceModule>();
 		app.MapModule<PromptModule>();
 
@@ -47,19 +47,7 @@ public static class ManicTimeReplApp
 	public static McpServerOptions BuildMcpServerOptions(ReplApp app)
 	{
 		ArgumentNullException.ThrowIfNull(app);
-		var coreProperty = typeof(ReplApp).GetProperty("Core", BindingFlags.Instance | BindingFlags.NonPublic);
-		var core = coreProperty?.GetValue(app) as ICoreReplApp
-			?? throw new InvalidOperationException("Unable to resolve the Repl core graph for MCP option building.");
-		return core.BuildMcpServerOptions(ConfigureMcpOptions, GetServiceProvider(app));
-	}
-
-	/// <summary>Resolves the shared service provider used by the Repl app.</summary>
-	internal static IServiceProvider GetServiceProvider(ReplApp app)
-	{
-		ArgumentNullException.ThrowIfNull(app);
-		var ensureSharedProvider = typeof(ReplApp).GetMethod("EnsureSharedProvider", BindingFlags.Instance | BindingFlags.NonPublic);
-		return ensureSharedProvider?.Invoke(app, parameters: null) as IServiceProvider
-			?? throw new InvalidOperationException("Unable to resolve the Repl app service provider.");
+		return app.BuildMcpServerOptions(ConfigureMcpOptions);
 	}
 
 	private static void ConfigureServices(IServiceCollection services, Action<IServiceCollection>? configureServices)
@@ -79,12 +67,14 @@ public static class ManicTimeReplApp
 		services.AddSingleton<ActivityTools>();
 		services.AddSingleton<NarrativeTools>();
 		services.AddSingleton<ManicTimeResources>();
+		services.AddSingleton<IMcpClientRoots, NullMcpClientRoots>();
 
 		services.AddSingleton<TimelineModule>();
 		services.AddSingleton<ActivityModule>();
 		services.AddSingleton<UsageModule>();
 		services.AddSingleton<SummaryModule>();
 		services.AddSingleton<ScreenshotModule>();
+		services.AddSingleton<WorkspaceModule>();
 		services.AddSingleton<ResourceModule>();
 		services.AddSingleton<PromptModule>();
 

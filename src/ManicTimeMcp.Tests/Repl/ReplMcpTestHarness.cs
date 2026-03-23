@@ -34,13 +34,24 @@ internal sealed class ReplMcpTestHarness : IAsyncDisposable
 
 	public McpClient Client => _client;
 
+	public static Task<ReplMcpTestHarness> CreateAsync(ReplApp app)
+	{
+		ArgumentNullException.ThrowIfNull(app);
+		return CreateCoreAsync(app);
+	}
+
 	public static async Task<ReplMcpTestHarness> CreateAsync(Func<ReplApp> appFactory)
 	{
 		ArgumentNullException.ThrowIfNull(appFactory);
 
 		var app = appFactory();
+		return await CreateCoreAsync(app).ConfigureAwait(false);
+	}
+
+	private static async Task<ReplMcpTestHarness> CreateCoreAsync(ReplApp app)
+	{
 		var options = ManicTimeMcp.Repl.ManicTimeReplApp.BuildMcpServerOptions(app);
-		var services = ManicTimeMcp.Repl.ManicTimeReplApp.GetServiceProvider(app);
+		var services = app.Services;
 		var serverName = options.ServerInfo?.Name ?? "ManicTime MCP";
 
 		var clientToServer = new Pipe();
