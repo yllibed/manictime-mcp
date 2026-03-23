@@ -106,8 +106,8 @@ The `ManicTimeReports.db` contains 26 tables. The schema manifest classifies eac
 | `Ar_TimelineSummary` | ~4 | Start/end date range per timeline |
 | `Ar_Environment` | ~1 | Device name, OS version, ManicTime version, .NET version |
 | `Ar_Folder` | ~2 | Document categories (e.g. "Web sites", "Files") |
-| `Ar_Tag` | ~varies | Tag definitions; used by enriched activity query (C) and `get_activity_narrative` |
-| `Ar_ActivityTag` | ~varies | Activity-to-tag join table; used by enriched activity query (C) and `get_activity_narrative` |
+| `Ar_Tag` | ~varies | Tag definitions; used by enriched activity query (C) and `summary narrative` |
+| `Ar_ActivityTag` | ~varies | Activity-to-tag join table; used by enriched activity query (C) and `summary narrative` |
 
 When `Ar_Tag` / `Ar_ActivityTag` are absent, tag-dependent features degrade gracefully (tag fields return NULL). The health resource reports degraded tag support.
 

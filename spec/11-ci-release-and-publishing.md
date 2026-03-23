@@ -75,6 +75,10 @@ Actions:
 ### MCP packaging manifest note
 
 - Maintain `.mcp/server.json` in the package as the canonical MCP server metadata manifest for published consumption.
+- The packaged manifest must describe the published `dnx` launch in the current structured format:
+  - `runtimeArguments` for launcher flags such as `-y`
+  - `packageArguments` for the package command path such as `mcp serve`
+- The packaged manifest must remain aligned with the documented client examples and the actual Repl-first startup contract.
 - Keep local development client config separate from packaged manifest metadata.
 
 ## Pre-Push Validation Policy
@@ -89,6 +93,22 @@ Before any push, local validation must run:
 
 Recommended implementation:
 - repository script (`scripts/prepush.ps1`) used by developers and CI parity checks.
+
+### Launch examples used by automation and docs
+
+Published package smoke:
+
+```bash
+dnx -y ManicTimeMcp mcp serve
+```
+
+Local development smoke:
+
+```bash
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- mcp serve
+```
+
+`dotnet run` requires the `--` separator. Packaged MCP manifests and JSON client configs do not, because they pass arguments as structured arrays.
 
 ## Reporting and Coverage
 

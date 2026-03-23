@@ -7,7 +7,7 @@
 
 ## Context
 
-Analysis of a real full-day narrative (91 segments) showed ~50% of the JSON payload was waste: repeated null fields, redundant `applicationColor` on every segment, constant `timelineRef`/`activityRef` in a nested `refs` object, and duplicated summary data. Gap-separated same-app segments forced the LLM to mentally re-merge what the server could have merged. The `get_website_usage` default included sub-6-second visits that added noise.
+Analysis of a real full-day narrative (91 segments) showed ~50% of the JSON payload was waste: repeated null fields, redundant `applicationColor` on every segment, constant `timelineRef`/`activityRef` in a nested `refs` object, and duplicated summary data. Gap-separated same-app segments forced the LLM to mentally re-merge what the server could have merged. The `usage websites` default included sub-6-second visits that added noise.
 
 ## Decision
 
@@ -16,9 +16,9 @@ Apply six contract changes to reduce payload size by ~35-50% for typical respons
 1. **Omit null fields globally** — `JsonIgnoreCondition.WhenWritingNull` on serializer options.
 2. **Remove `applicationColor` from segments** — color remains available in `topApplications[].color`.
 3. **Flatten `refs` object to `screenshotRef`** — remove `timelineRef` and `activityRef` (opaque, unused by consumers), promote `screenshotRef` to a top-level segment field.
-4. **Gap-based segment merging** — add `maxGapMinutes` parameter (default 2.0) to `get_activity_narrative` and `get_daily_summary`. Same-app segments separated by gaps within the threshold are merged into continuous work blocks.
-5. **`includeSummary` parameter** — add to `get_activity_narrative` (default false per ADR-0007). When true, include `topApplications`/`topWebsites` computation.
-6. **Raise default `minMinutes` for `get_website_usage`** — from 0 to 0.5, filtering sub-30s visits by default.
+4. **Gap-based segment merging** — add `maxGapMinutes` parameter (default 2.0) to `summary narrative` and `summary daily`. Same-app segments separated by gaps within the threshold are merged into continuous work blocks.
+5. **`includeSummary` parameter** — add to `summary narrative` (default false per ADR-0007). When true, include `topApplications`/`topWebsites` computation.
+6. **Raise default `minMinutes` for `usage websites`** — from 0 to 0.5, filtering sub-30s visits by default.
 
 ## Decision Drivers
 
@@ -47,7 +47,7 @@ Apply six contract changes to reduce payload size by ~35-50% for typical respons
 
 - Existing consumers parsing `refs.screenshotRef` must update to `screenshotRef`.
 - Existing consumers parsing `applicationColor` on segments must read `topApplications[].color` instead.
-- `get_website_usage` callers who want all sites must now pass `minMinutes=0` explicitly.
+- `usage websites` callers who want all sites must now pass `minMinutes=0` explicitly.
 
 ### Neutral
 

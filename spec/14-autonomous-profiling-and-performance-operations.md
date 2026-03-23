@@ -56,7 +56,7 @@ They should not be the only source of truth for highly noisy machine-level compa
 ### Suggested scenario matrix
 
 1. Cold start to MCP initialize complete.
-2. `get_daily_summary` on small/medium/large fixture windows.
+2. `summary daily` on small/medium/large fixture windows.
 3. Screenshot metadata selection with and without thumbnails.
 4. Repeated tool invocations for steady-state allocation profiling.
 

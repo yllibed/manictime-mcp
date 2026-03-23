@@ -1,4 +1,4 @@
-# ADR 0007 — Defect Fixes and save_screenshot Tool
+# ADR 0007 — Defect Fixes and Screenshot Save Workflow
 
 - Status: Accepted
 - Date: 2026-02-17
@@ -15,11 +15,11 @@ Apply 8 targeted fixes and add one new tool:
 
 1. **Clip segments to Active/Away boundaries** — query the `ManicTime/ComputerUsage` timeline and intersect application activities with Active intervals. Activities spanning Away/Locked/Off periods are split or excluded.
 2. **Preserve Document/Website during segment merging** — `MergeTwo()` now carries forward non-null `Document` and `Website` fields from the accumulator segment.
-3. **Make segment limit configurable** — add `maxSegments` parameter (default 200, max 2000) to `get_daily_summary` and `get_activity_narrative`.
+3. **Make segment limit configurable** — add `maxSegments` parameter (default 200, max 2000) to `summary daily` and `summary narrative`.
 4. **Fix file path parsing** — Windows paths (e.g. `C:\Users\...`) in the Documents timeline are normalized to `file:///` URIs instead of being misinterpreted as `http://c/...`.
 5. **Improve website matching** — add 5-second tolerance for near-miss overlaps and carry-forward logic for consecutive browser segments.
-6. **Add `save_screenshot` tool** — writes screenshots to disk within MCP client-declared roots, with path traversal validation and optional crop.
-7. **Change `includeSummary` default to `false`** on `get_activity_narrative` — avoids duplicating `topApplications`/`topWebsites` when clients call both `get_daily_summary` and `get_activity_narrative`.
+6. **Add `screenshot save` command/tool** — writes screenshots to disk within MCP roots, with path traversal validation and optional crop.
+7. **Change `includeSummary` default to `false`** on `summary narrative` — avoids duplicating `topApplications`/`topWebsites` when clients call both `summary daily` and `summary narrative`.
 8. **Compute `totalActiveMinutes` after merging** — the value now reflects actual unique active time, consistent with the pre-aggregated path.
 
 ## Decision Drivers
@@ -37,15 +37,16 @@ Apply 8 targeted fixes and add one new tool:
 - Accurate active-time computation — Away/Locked/Off periods excluded.
 - Website data populated on most browser segments.
 - File paths rendered as proper `file:///` URIs.
-- `save_screenshot` enables end-to-end daily recap with embedded images.
+- `screenshot save` enables end-to-end daily recap with embedded images.
 - Segment merging preserves document and website context.
 - Configurable segment limit supports full-day detail requests.
 
 ### Negative
 
-- **Breaking:** `includeSummary` default changed from `true` to `false` on `get_activity_narrative`. Existing callers that relied on the default to get summary data must now pass `includeSummary=true` explicitly.
+- **Breaking:** `includeSummary` default changed from `true` to `false` on `summary narrative`. Existing callers that relied on the default to get summary data must now pass `includeSummary=true` explicitly.
 - **Breaking:** `totalActiveMinutes` semantics changed from pre-merge sum to post-merge sum. Values will be slightly lower (and more accurate) for days with overlapping segments.
-- `save_screenshot` is the first write operation — requires MCP roots capability from the client.
+- `screenshot save` is the first write operation.
+- In the current Repl-first architecture, native MCP roots are preferred and `workspace init` provides the soft-roots fallback when the client does not advertise roots.
 
 ### Neutral
 
@@ -60,7 +61,8 @@ Apply 8 targeted fixes and add one new tool:
   - `IScreenshotService.cs` / `ScreenshotService.cs` — WriteScreenshot method
   - `Log.cs` — new log messages for write operations
   - Test files — 17 new tests
-- Migration: clients parsing `topApplications` from `get_activity_narrative` must add `includeSummary=true`.
+- Migration: clients parsing `topApplications` from `summary narrative` must add `includeSummary=true`.
+- Terminology update: the current public contract is Repl-first (`summary narrative`, `summary daily`, `screenshot save`, `workspace init`) even though this ADR preserves the historical defect-fix framing.
 - Test/verification: 251 tests passing, 0 warnings.
 
 ## References

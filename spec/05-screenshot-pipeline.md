@@ -46,7 +46,7 @@
 - Keep `screenshotRef` stable for the lifetime of the MCP session.
 - Continue operating core non-screenshot tools when screenshot parsing is unavailable or incompatible.
 - Report screenshot degradation in both:
-  - `manictime://health`
+  - `manictime://resource/health`
   - screenshot tool response payloads
 
 ## Non-Functional Requirements
@@ -85,7 +85,7 @@ The screenshot workflow is hosted as Repl commands and exposed through `Repl.Mcp
 - `screenshot get` returns structured JSON including resolved metadata plus image payload in a text-safe representation.
 - `screenshot crop` returns structured JSON including crop metadata plus the cropped image payload in a text-safe representation.
 - `screenshot save` persists the original or cropped image to disk and returns the resolved output path plus size.
-- `manictime://screenshot/{screenshotRef}` remains optional as a lazy-fetch resource when the active transport can serve it without introducing a competing image contract. The command workflow remains canonical.
+- No lazy screenshot resource is part of the active v1 contract. The command workflow is canonical.
 
 The application must not depend on native MCP image blocks being the only supported delivery model. If a future `Repl.Mcp` release adds richer image support, those richer blocks may be layered in without changing the command semantics defined here.
 
@@ -94,10 +94,11 @@ The application must not depend on native MCP image blocks being the only suppor
 Screenshot persistence is a first-class workflow:
 
 - the agent may provide `outputPath` when it wants a file persisted for a report or asset pipeline
-- the server validates the resolved path against MCP client-declared roots
+- the server validates the resolved path against MCP client-declared roots or session-initialized soft roots
 - traversal and out-of-root writes must be rejected deterministically
 - when `outputPath` is omitted, the server generates a deterministic filename from the screenshot timestamp
 - optional crop parameters may be combined with save so the persisted asset is immediately report-ready
+- when native roots are unavailable, `workspace init` is the canonical soft-roots bootstrap step before `screenshot save`
 
 #### Token cost model
 
@@ -110,9 +111,9 @@ See ADR-0003 for the decision rationale.
 
 ### Progressive resolution workflow
 
-The screenshot pipeline exposes three tiers of detail, each a separate MCP tool:
+The screenshot pipeline exposes four tiers of detail, each a separate MCP tool or helper:
 
-1. **`list_screenshots`** — Metadata only. Zero image bytes.
+1. **`screenshot list`** — Metadata only. Zero image bytes.
    - Returns: `screenshotRef`, timestamp, display-local timestamp, dimensions, monitor index, thumbnail availability.
    - Timestamp collision behavior: when multiple files share the same timestamp, return all candidates as separate entries with distinct `screenshotRef` values.
    - Availability discovery: this is the canonical first call when the model does not know whether screenshots exist in a period.
@@ -120,15 +121,15 @@ The screenshot pipeline exposes three tiers of detail, each a separate MCP tool:
    - Content: structured JSON result from the Repl command.
    - Use case: model surveys available screenshots, then chains follow-up calls without extra lookup.
 
-2. **`get_screenshot`** — Single image retrieval for model or user follow-up.
-   - Input: `screenshotRef` from `list_screenshots`.
+2. **`screenshot get`** — Single image retrieval for model or user follow-up.
+   - Input: `screenshotRef` from `screenshot list`.
    - Returns structured JSON with resolved metadata plus image payload in a transport-compatible text-safe representation.
    - When a thumbnail exists, it should be the default retrieval form to control payload size.
    - Full-size retrieval remains available when required by crop or save operations.
 
-3. **`crop_screenshot`** — Region-of-interest extraction (model-driven).
-   - Input: `screenshotRef` from `list_screenshots`.
-   - Designed for model-driven workflows: the model inspects the thumbnail returned by `get_screenshot`, identifies a region of interest, then requests a full-resolution crop.
+3. **`screenshot crop`** — Region-of-interest extraction (model-driven).
+   - Input: `screenshotRef` from `screenshot list`.
+   - Designed for model-driven workflows: the model inspects the thumbnail returned by `screenshot get`, identifies a region of interest, then requests a full-resolution crop.
    - Crop parameters are percentage-first (`coordinateUnits = percent`) for model ergonomics:
      - `x`, `y`, `width`, `height` default range `0..100`.
    - Optional normalized mode is supported (`coordinateUnits = normalized`) with `0.0..1.0` values.
@@ -138,9 +139,14 @@ The screenshot pipeline exposes three tiers of detail, each a separate MCP tool:
    - Returns: structured JSON containing cropped-image metadata and payload in the active transport-compatible format.
    - Requires SkiaSharp dependency for JPEG processing (see ADR-0004).
 
-4. **`save_screenshot`** — Persist the original or cropped image to disk.
-   - Input: `screenshotRef` from `list_screenshots`, optional `outputPath`, optional crop options.
-   - Validates the destination against MCP client roots.
+4. **`workspace init`** — Establish a soft root when the MCP client does not advertise native roots.
+   - Input: absolute filesystem path.
+   - Stores a session-scoped root for later filesystem writes.
+   - This step is optional when native roots already exist.
+
+5. **`screenshot save`** — Persist the original or cropped image to disk.
+   - Input: `screenshotRef` from `screenshot list`, optional `outputPath`, optional crop options.
+   - Validates the destination against native MCP roots or soft roots established by `workspace init`.
    - Returns the final resolved path and file size.
    - This is the canonical path when the agent needs a durable artifact for reports, markdown, or downstream tooling.
 
@@ -169,6 +175,7 @@ This workstream can be implemented independently using filesystem fixtures and s
 - Command-output tests verifying transport-compatible structured JSON for list/get/crop.
 - Progressive resolution integration tests (`list` -> `get` -> `crop` workflow).
 - Save workflow tests (`list` -> `get`/`crop` -> `save`) including agent-supplied output paths.
+- Soft-roots workflow tests (`workspace init` -> `save`) for clients without native roots.
 - Percentage and normalized coordinate crop tests (including bounds validation and clamping behavior).
 - Degraded-response tests (reason code + remediation hint in tool payloads).
 

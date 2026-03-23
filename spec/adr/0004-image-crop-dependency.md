@@ -7,11 +7,11 @@
 
 ## Context
 
-The progressive resolution screenshot workflow (ADR-0003) includes a `crop_screenshot` tool that extracts a region of interest from a full-size screenshot. The public contract is defined as percentage-first (`0..100`) with optional normalized support (`0.0..1.0`) so selection can be derived from thumbnails while extracting pixels from the full-size source. This requires server-side JPEG decoding, coordinate transform, pixel-region extraction, clamping to image bounds, and re-encoding. The .NET base class library does not include robust production image processing for this use case, so an external dependency is needed.
+The progressive resolution screenshot workflow (WS-05) includes a `screenshot crop` command/tool that extracts a region of interest from a full-size screenshot. The public contract is defined as percentage-first (`0..100`) with optional normalized support (`0.0..1.0`) so selection can be derived from thumbnails while extracting pixels from the full-size source. This requires server-side JPEG decoding, coordinate transform, pixel-region extraction, clamping to image bounds, and re-encoding. The .NET base class library does not include robust production image processing for this use case, so an external dependency is needed.
 
 ## Decision
 
-Add SkiaSharp as the image processing dependency for `crop_screenshot` and use server-side ROI-to-pixel mapping (percentage-first with optional normalized input) before crop execution, with bounds clamping.
+Add SkiaSharp as the image processing dependency for `screenshot crop` and use server-side ROI-to-pixel mapping (percentage-first with optional normalized input) before crop execution, with bounds clamping.
 
 ## Decision Drivers
 
@@ -79,7 +79,7 @@ Add SkiaSharp as the image processing dependency for `crop_screenshot` and use s
 
 ### Positive
 
-- `crop_screenshot` becomes available with percentage-first ROI inputs that are practical for thumbnail-driven workflows.
+- `screenshot crop` becomes available with percentage-first ROI inputs that are practical for thumbnail-driven workflows.
 - Progressive resolution workflow is fully operational.
 - AI models can request focused regions, reducing unnecessary context.
 - SkiaSharp's native performance keeps crop latency low.
@@ -91,7 +91,7 @@ Add SkiaSharp as the image processing dependency for `crop_screenshot` and use s
 
 ### Neutral
 
-- SkiaSharp is only loaded when `crop_screenshot` is invoked; no startup cost for other tools.
+- SkiaSharp is only loaded when `screenshot crop` is invoked; no startup cost for other tools.
 - The dependency is isolated to the screenshot pipeline; no coupling to database or MCP layers.
 
 ## Implementation Notes
