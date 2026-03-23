@@ -162,6 +162,7 @@ internal static class ManicTimeReplHandlers
 		[Description("Inclusive screenshot time window.")] ReplDateTimeRange window,
 		ScreenshotListOptions? options,
 		[FromServices] IScreenshotService screenshotService,
+		[FromServices] IScreenshotRegistry registry,
 		CancellationToken cancellationToken)
 	{
 		options ??= new ScreenshotListOptions();
@@ -176,22 +177,31 @@ internal static class ManicTimeReplHandlers
 			},
 			cancellationToken).ConfigureAwait(false);
 
+		var screenshots = selection.Screenshots
+			.Select(screenshot => new
+			{
+				Info = screenshot,
+				Ref = screenshot.Ref ?? registry.Register(screenshot),
+			})
+			.ToArray();
+
 		return new
 		{
-			screenshots = selection.Screenshots.Select(static screenshot => new
+			screenshots = screenshots.Select(static screenshot => new
 			{
 				screenshotRef = screenshot.Ref,
-				timestamp = screenshot.LocalTimestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
-				screenshot.Width,
-				screenshot.Height,
-				screenshot.Monitor,
-				screenshot.IsThumbnail,
-			}),
+				timestamp = screenshot.Info.LocalTimestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+				displayLocalTime = screenshot.Info.LocalTimestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+				screenshot.Info.Width,
+				screenshot.Info.Height,
+				screenshot.Info.Monitor,
+				hasThumbnail = screenshot.Info.IsThumbnail,
+			}).ToArray(),
 			sampling = selection.SamplingStrategyUsed.ToString().ToLowerInvariant(),
 			truncation = new
 			{
 				truncated = selection.IsTruncated,
-				returnedCount = selection.Screenshots.Count,
+				returnedCount = screenshots.Length,
 				totalAvailable = selection.TotalMatching,
 			},
 			diagnostics = DiagnosticsInfo.Ok,
@@ -212,8 +222,14 @@ internal static class ManicTimeReplHandlers
 		var thumbnailPath = info.IsThumbnail ? info.FilePath : GetThumbnailPath(info.FilePath);
 		var fullSizePath = info.IsThumbnail ? GetFullSizePath(info.FilePath) : info.FilePath;
 		var thumbnailBytes = thumbnailPath is not null ? screenshotService.ReadScreenshot(thumbnailPath) : null;
-		var fullBytes = fullSizePath is not null ? screenshotService.ReadScreenshot(fullSizePath) : null;
-		var selectedBytes = thumbnailBytes ?? fullBytes;
+		byte[]? fullBytes = null;
+		var selectedBytes = thumbnailBytes;
+		if (selectedBytes is null)
+		{
+			fullBytes = fullSizePath is not null ? screenshotService.ReadScreenshot(fullSizePath) : null;
+			selectedBytes = fullBytes;
+		}
+
 		if (selectedBytes is null)
 		{
 			return Results.NotFound("Screenshot file not found or inaccessible.");
@@ -528,15 +544,17 @@ internal static class ManicTimeReplHandlers
 	private static string ToDateLiteral(DateOnly date) =>
 		date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-	private static string GetThumbnailPath(string filePath) =>
+	private static string? GetThumbnailPath(string filePath) =>
 		filePath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
 			? string.Concat(filePath.AsSpan(0, filePath.Length - 4), ".thumbnail.jpg")
-			: filePath;
+			: null;
 
 	private static string? GetFullSizePath(string filePath) =>
 		filePath.Contains(".thumbnail.", StringComparison.OrdinalIgnoreCase)
 			? filePath.Replace(".thumbnail.", ".", StringComparison.OrdinalIgnoreCase)
-			: filePath;
+			: filePath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
+				? filePath
+				: null;
 
 	private static SamplingStrategy ParseSamplingStrategy(string? value) =>
 		value?.Trim().ToUpperInvariant() switch

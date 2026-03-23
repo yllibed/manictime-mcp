@@ -3,7 +3,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using ManicTimeMcp.Configuration;
 using ManicTimeMcp.Database;
-using ManicTimeMcp.Screenshots;
 
 namespace ManicTimeMcp.Mcp;
 

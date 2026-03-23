@@ -1,4 +1,3 @@
-using ManicTimeMcp.Screenshots;
 using Repl;
 
 namespace ManicTimeMcp.Repl;

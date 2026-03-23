@@ -179,15 +179,23 @@ public sealed class ManicTimeReplFeatureTests
 	}
 
 	[TestMethod]
-	public async Task ScreenshotList_OmitsBrokenScreenshotResourceUri()
+	public async Task ScreenshotList_RegistersRefsAndExposesContractFields()
 	{
+		var registry = new ScreenshotRegistry();
+		var thumbnailScreenshot = SampleScreenshot with
+		{
+			IsThumbnail = true,
+			FilePath = @"C:\Data\Screenshots\2025-01-15\2025-01-15_10-30-00_+01-00_1920_1080_0_0.thumbnail.jpg",
+			Ref = null,
+		};
+
 		await using var harness = await CreateHarnessAsync(services =>
 		{
-			services.AddSingleton<IScreenshotRegistry, ScreenshotRegistry>();
+			services.AddSingleton<IScreenshotRegistry>(registry);
 			services.AddSingleton<IScreenshotService>(new StubScreenshotService(
 				new ScreenshotSelection
 				{
-					Screenshots = [SampleScreenshot],
+					Screenshots = [thumbnailScreenshot],
 					TotalMatching = 1,
 					IsTruncated = false,
 					SamplingStrategyUsed = SamplingStrategy.Interval,
@@ -205,7 +213,11 @@ public sealed class ManicTimeReplFeatureTests
 
 		var doc = ParseSingleTextPayload(result);
 		var screenshot = doc.RootElement.GetProperty("screenshots")[0];
+		screenshot.GetProperty("screenshotRef").GetString().Should().NotBeNullOrWhiteSpace();
+		screenshot.GetProperty("displayLocalTime").GetString().Should().Be("2025-01-15 10:30:00");
+		screenshot.GetProperty("hasThumbnail").GetBoolean().Should().BeTrue();
 		screenshot.TryGetProperty("resourceUri", out _).Should().BeFalse();
+		screenshot.TryGetProperty("isThumbnail", out _).Should().BeFalse();
 	}
 
 	[TestMethod]
@@ -213,10 +225,12 @@ public sealed class ManicTimeReplFeatureTests
 	{
 		var registry = new ScreenshotRegistry();
 		var screenshotRef = registry.Register(SampleScreenshot);
+		var readPaths = new List<string>();
 		await using var harness = await CreateHarnessAsync(services =>
 		{
 			services.AddSingleton<IScreenshotRegistry>(registry);
 			services.AddSingleton<IScreenshotService>(new StubScreenshotService(
+				onReadScreenshot: readPaths.Add,
 				readScreenshot: static filePath => filePath.Contains(".thumbnail.", StringComparison.OrdinalIgnoreCase)
 					? ThumbnailBytes
 					: FullSizeBytes));
@@ -234,6 +248,8 @@ public sealed class ManicTimeReplFeatureTests
 		var doc = ParseSingleTextPayload(result);
 		doc.RootElement.GetProperty("thumbnailBase64").GetString().Should().Be(Convert.ToBase64String(ThumbnailBytes));
 		doc.RootElement.GetProperty("imageBase64").GetString().Should().Be(Convert.ToBase64String(ThumbnailBytes));
+		readPaths.Should().ContainSingle(path => path.Contains(".thumbnail.", StringComparison.OrdinalIgnoreCase));
+		readPaths.Should().NotContain(path => !path.Contains(".thumbnail.", StringComparison.OrdinalIgnoreCase));
 	}
 
 	[TestMethod]
