@@ -2,41 +2,65 @@
 
 [![NuGet](https://img.shields.io/nuget/v/ManicTimeMcp.svg)](https://www.nuget.org/packages/ManicTimeMcp)
 
-A .NET [MCP](https://modelcontextprotocol.io) server that gives AI agents read-only access to your local [ManicTime](https://www.manictime.com) activity data — applications, documents, websites, screenshots, and usage patterns.
+A .NET [MCP](https://modelcontextprotocol.io) server and Repl-based command app that gives AI agents and local operators read-only access to local [ManicTime](https://www.manictime.com) activity data: applications, documents, websites, screenshots, and usage patterns.
 
 > **Compatibility notice** — This project is an independent integration and is not affiliated with or endorsed by ManicTime or Finkit.
 
-## Quick start
+## Three aligned modes
 
-Requires the [.NET 10+ SDK](https://dotnet.microsoft.com/download/dotnet). Run directly with `dnx` — no install step needed:
+The same application exposes three aligned surfaces:
+
+| Mode | Purpose | Typical command |
+|---|---|---|
+| `MCP` | Serve stdio tools/resources/prompts to an agent client | `dnx -y ManicTimeMcp mcp serve` |
+| `CLI` | Run one command directly and emit structured output | `dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- timeline list --output:json` |
+| `REPL` | Explore the command graph interactively with help and discovery | `dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj` |
+
+### When to use which mode
+
+- Use `MCP` when Claude, Copilot, Codex, or another MCP-compatible client should call the server over stdio.
+- Use `CLI` when you want one direct command locally, especially for testing payloads or troubleshooting output.
+- Use `REPL` when you want interactive discovery, `--help`, or to explore routes before wiring an MCP client.
+
+## Launching the app
+
+### Published package
+
+Requires the [.NET 10+ SDK](https://dotnet.microsoft.com/download/dotnet). Run directly with `dnx`:
 
 ```bash
 dnx -y ManicTimeMcp mcp serve
 ```
 
-This downloads the latest version and starts the server over **stdio**. It expects a local ManicTime Windows desktop installation with local storage.
+This downloads the latest published package and starts the MCP server over **stdio**.
 
-## Local development modes
+### Local development
 
-Use the project directly while developing:
+Start the MCP server from source:
 
 ```bash
 dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- mcp serve
 ```
 
-Use the same app as a CLI or interactive REPL:
+Run one CLI command directly:
+
+```bash
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- timeline list --output:json
+```
+
+Start the interactive REPL:
 
 ```bash
 dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj
 ```
 
-The `--` is required with `dotnet run` because it separates `dotnet` launcher arguments from the app's own `mcp serve` command path.
+`dotnet run` requires the `--` separator because it splits `dotnet` launcher arguments from the app's own command path. MCP client JSON configs do **not** use this separator because they already pass arguments as an explicit array.
 
 ## Agent configuration
 
 ### Visual Studio / VS Code (Copilot)
 
-The package embeds a `.mcp/server.json` manifest. Browse [ManicTimeMcp on NuGet.org](https://www.nuget.org/packages/ManicTimeMcp), open the **MCP Server** tab, and copy the configuration into your IDE.
+The package embeds a `.mcp/server.json` manifest. Browse [ManicTimeMcp on NuGet.org](https://www.nuget.org/packages/ManicTimeMcp), open the **MCP Server** tab, and copy the generated configuration into your IDE.
 
 Or add manually to `.vscode/mcp.json`:
 
@@ -81,8 +105,6 @@ codex mcp add manictime-mcp -- dnx -y ManicTimeMcp mcp serve
 
 ### Generic MCP JSON configuration
 
-For any MCP-compatible client that accepts a JSON config:
-
 ```json
 {
   "mcpServers": {
@@ -95,18 +117,12 @@ For any MCP-compatible client that accepts a JSON config:
 }
 ```
 
-## What it provides
-
-The same app exposes three aligned surfaces:
-
-- `MCP`: flattened tool and prompt names such as `timeline_list`, `summary_daily`, and `prompt_daily-review`.
-- `CLI`: direct commands such as `timeline list --output:json`.
-- `REPL`: the same hierarchical command graph with interactive help and prompts.
+## Repl-first surface
 
 ### Commands and MCP tools
 
 | Repl / CLI command | MCP tool | Description |
-|------|------|-------------|
+|---|---|---|
 | `timeline list` | `timeline_list` | List available ManicTime timelines |
 | `activity list` | `activity_list` | Raw activities from a specific timeline |
 | `activity computer-usage` | `activity_computer-usage` | Computer on/off/idle/locked activities |
@@ -115,17 +131,18 @@ The same app exposes three aligned surfaces:
 | `usage documents` | `usage_documents` | Document usage for a date range |
 | `usage websites` | `usage_websites` | Website usage with hourly or daily breakdown |
 | `summary daily` | `summary_daily` | Structured summary for a single day |
-| `summary narrative` | `summary_narrative` | "What did I do?" narrative for a date range |
+| `summary narrative` | `summary_narrative` | Structured "what did I do?" narrative |
 | `summary period` | `summary_period` | Multi-day overview with patterns and breakdowns |
 | `screenshot list` | `screenshot_list` | Discover screenshots with metadata only |
 | `screenshot get` | `screenshot_get` | Retrieve a screenshot payload |
 | `screenshot crop` | `screenshot_crop` | Crop a region of interest from a screenshot |
-| `screenshot save` | `screenshot_save` | Save a screenshot to disk within MCP client roots |
+| `screenshot save` | `screenshot_save` | Save a screenshot within MCP client roots |
+| `workspace init` | `workspace_init` | Initialize soft roots for clients without native roots |
 
 ### Resources
 
 | Resource URI | Repl / CLI command | Description |
-|----------|------|-------------|
+|---|---|---|
 | `manictime://resource/config` | `resource config` | Active ManicTime configuration and resolved data directory |
 | `manictime://resource/timelines` | `resource timelines` | Available timelines as a resource payload |
 | `manictime://resource/health` | `resource health` | Server health and database status |
@@ -136,10 +153,20 @@ The same app exposes three aligned surfaces:
 ### Prompts
 
 | Repl / CLI prompt | MCP prompt | Description |
-|--------|------|-------------|
-| `prompt daily-review` | `prompt_daily-review` | "Summarize my activities for {date}" |
-| `prompt weekly-review` | `prompt_weekly-review` | "Summarize my week for {period}" |
-| `prompt screenshot-investigation` | `prompt_screenshot-investigation` | "What was I doing during {window}?" |
+|---|---|---|
+| `prompt daily-review` | `prompt_daily-review` | Summarize my activities for a date |
+| `prompt weekly-review` | `prompt_weekly-review` | Summarize a multi-day period |
+| `prompt screenshot-investigation` | `prompt_screenshot-investigation` | Investigate what was happening during a date-time window |
+
+## Workspace and screenshot save workflow
+
+`screenshot save` writes only inside MCP client roots.
+
+- If the MCP client supports native roots, `screenshot save` uses them directly.
+- If the client does not support native roots, call `workspace init {path}` first to establish **soft roots** for the session, then call `screenshot save`.
+- `workspace init` is a session-scoped MCP helper. It exists mainly for agent workflows, not as a replacement for local filesystem paths in CLI mode.
+
+See [docs/modes-and-workspaces.md](D:\src\manictime-mcp\docs\modes-and-workspaces.md) for end-to-end examples.
 
 ## Supported scope
 
@@ -153,9 +180,10 @@ The same app exposes three aligned surfaces:
 dotnet restore src/ManicTimeMcp.slnx
 dotnet build src/ManicTimeMcp.slnx -warnaserror
 dotnet test --solution src/ManicTimeMcp.slnx
+dotnet pack src/ManicTimeMcp.slnx -c Release
 ```
 
-See `docs/getting-started.md` for prerequisites and `AGENTS.md` for engineering rules.
+See [getting-started.md](D:\src\manictime-mcp\docs\getting-started.md) for prerequisites and local usage, and [AGENTS.md](D:\src\manictime-mcp\AGENTS.md) for engineering rules.
 
 ## Contributing
 
