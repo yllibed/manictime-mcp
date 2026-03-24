@@ -27,10 +27,10 @@ Because of those changes, the old `ImageContentBlock`-first decision is no longe
 
 The active direction is defined by:
 
-- [0008-repl-first-command-graph-and-mcp-integration.md](D:\src\manictime-mcp\spec\adr\0008-repl-first-command-graph-and-mcp-integration.md)
-- [0009-temporal-ranges-and-reusable-option-groups.md](D:\src\manictime-mcp\spec\adr\0009-temporal-ranges-and-reusable-option-groups.md)
-- [05-screenshot-pipeline.md](D:\src\manictime-mcp\spec\05-screenshot-pipeline.md)
-- [06-mcp-contract-tools-resources-prompts.md](D:\src\manictime-mcp\spec\06-mcp-contract-tools-resources-prompts.md)
+- [0008-repl-first-command-graph-and-mcp-integration.md](0008-repl-first-command-graph-and-mcp-integration.md)
+- [0009-temporal-ranges-and-reusable-option-groups.md](0009-temporal-ranges-and-reusable-option-groups.md)
+- [05-screenshot-pipeline.md](../05-screenshot-pipeline.md)
+- [06-mcp-contract-tools-resources-prompts.md](../06-mcp-contract-tools-resources-prompts.md)
 
 ## Retained historical value
 

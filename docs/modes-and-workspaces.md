@@ -98,7 +98,7 @@ Use it when:
 Example:
 
 ```text
-workspace init D:\reports\weekly-recap
+workspace init C:\reports\weekly-recap
 ```
 
 This sets a session-scoped workspace root so later `screenshot save` calls can resolve a relative output path safely inside that directory.
@@ -125,7 +125,7 @@ screenshot save --screenshotRef <ref> --outputPath assets/focus
 ### Client without native roots
 
 ```text
-workspace init D:\reports\weekly-recap
+workspace init C:\reports\weekly-recap
 screenshot list --window 2026-03-20T09:00:00..2026-03-20T10:00:00
 screenshot get --screenshotRef <ref>
 screenshot crop --screenshotRef <ref> --x 20 --y 15 --width 40 --height 30

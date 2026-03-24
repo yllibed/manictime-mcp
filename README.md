@@ -166,7 +166,7 @@ codex mcp add manictime-mcp -- dnx -y ManicTimeMcp mcp serve
 - If the client does not support native roots, call `workspace init {path}` first to establish **soft roots** for the session, then call `screenshot save`.
 - `workspace init` is a session-scoped MCP helper. It exists mainly for agent workflows, not as a replacement for local filesystem paths in CLI mode.
 
-See [docs/modes-and-workspaces.md](D:\src\manictime-mcp\docs\modes-and-workspaces.md) for end-to-end examples.
+See [docs/modes-and-workspaces.md](docs/modes-and-workspaces.md) for end-to-end examples.
 
 ## Supported scope
 
@@ -183,7 +183,7 @@ dotnet test --solution src/ManicTimeMcp.slnx
 dotnet pack src/ManicTimeMcp.slnx -c Release
 ```
 
-See [getting-started.md](D:\src\manictime-mcp\docs\getting-started.md) for prerequisites and local usage, and [AGENTS.md](D:\src\manictime-mcp\AGENTS.md) for engineering rules.
+See [getting-started.md](docs/getting-started.md) for prerequisites and local usage, and [AGENTS.md](AGENTS.md) for engineering rules.
 
 ## Contributing
 

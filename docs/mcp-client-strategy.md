@@ -46,7 +46,7 @@ dnx -y ManicTimeMcp mcp serve
 
 Never keep this process attached as an always-on coding MCP while changing the same repository.
 
-For the difference between MCP, CLI, and REPL usage, plus the `workspace init` soft-roots workflow, see [modes-and-workspaces.md](D:\src\manictime-mcp\docs\modes-and-workspaces.md).
+For the difference between MCP, CLI, and REPL usage, plus the `workspace init` soft-roots workflow, see [modes-and-workspaces.md](modes-and-workspaces.md).
 
 ## Local `.mcp.json` Policy In This Repo
 

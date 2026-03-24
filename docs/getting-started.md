@@ -48,7 +48,7 @@ dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- timeline list --out
 
 ## Using the product
 
-The recommended user-facing entrypoint is now [modes-and-workspaces.md](D:\src\manictime-mcp\docs\modes-and-workspaces.md).
+The recommended user-facing entrypoint is now [modes-and-workspaces.md](modes-and-workspaces.md).
 
 That page explains:
 
@@ -98,5 +98,5 @@ docs/                       User and contributor documentation
 
 ## For Users
 
-- For package and client setup, start with [README](D:\src\manictime-mcp\README.md).
-- For mode selection, roots, and screenshot persistence workflows, use [modes-and-workspaces.md](D:\src\manictime-mcp\docs\modes-and-workspaces.md).
+- For package and client setup, start with [README](../README.md).
+- For mode selection, roots, and screenshot persistence workflows, use [modes-and-workspaces.md](modes-and-workspaces.md).
