@@ -182,42 +182,60 @@ public sealed class ManicTimeReplFeatureTests
 	public async Task ScreenshotList_RegistersRefsAndExposesContractFields()
 	{
 		var registry = new ScreenshotRegistry();
-		var thumbnailScreenshot = SampleScreenshot with
+		var screenshotDirectory = Path.Combine(Path.GetTempPath(), $"manictime-mcp-screenshots-{Guid.NewGuid():N}");
+		Directory.CreateDirectory(screenshotDirectory);
+
+		var fullSizePath = Path.Combine(screenshotDirectory, "2025-01-15_10-30-00_+01-00_1920_1080_0_0.jpg");
+		var thumbnailPath = Path.Combine(screenshotDirectory, "2025-01-15_10-30-00_+01-00_1920_1080_0_0.thumbnail.jpg");
+		File.WriteAllBytes(fullSizePath, [0x01]);
+		File.WriteAllBytes(thumbnailPath, [0x02]);
+
+		var fullSizeScreenshot = SampleScreenshot with
 		{
-			IsThumbnail = true,
-			FilePath = @"C:\Data\Screenshots\2025-01-15\2025-01-15_10-30-00_+01-00_1920_1080_0_0.thumbnail.jpg",
+			IsThumbnail = false,
+			FilePath = fullSizePath,
 			Ref = null,
 		};
 
-		await using var harness = await CreateHarnessAsync(services =>
+		try
 		{
-			services.AddSingleton<IScreenshotRegistry>(registry);
-			services.AddSingleton<IScreenshotService>(new StubScreenshotService(
-				new ScreenshotSelection
-				{
-					Screenshots = [thumbnailScreenshot],
-					TotalMatching = 1,
-					IsTruncated = false,
-					SamplingStrategyUsed = SamplingStrategy.Interval,
-				}));
-		}).ConfigureAwait(false);
-
-		var result = await harness.Client.CallToolAsync(
-			"screenshot_list",
-			new Dictionary<string, object?>(StringComparer.Ordinal)
+			await using var harness = await CreateHarnessAsync(services =>
 			{
-				["window"] = "2025-01-15T10:00:00..2025-01-15T11:00:00",
+				services.AddSingleton<IScreenshotRegistry>(registry);
+				services.AddSingleton<IScreenshotService>(new StubScreenshotService(
+					new ScreenshotSelection
+					{
+						Screenshots = [fullSizeScreenshot],
+						TotalMatching = 1,
+						IsTruncated = false,
+						SamplingStrategyUsed = SamplingStrategy.Interval,
+					}));
 			}).ConfigureAwait(false);
 
-		result.IsError.Should().NotBeTrue();
+			var result = await harness.Client.CallToolAsync(
+				"screenshot_list",
+				new Dictionary<string, object?>(StringComparer.Ordinal)
+				{
+					["window"] = "2025-01-15T10:00:00..2025-01-15T11:00:00",
+				}).ConfigureAwait(false);
 
-		var doc = ParseSingleTextPayload(result);
-		var screenshot = doc.RootElement.GetProperty("screenshots")[0];
-		screenshot.GetProperty("screenshotRef").GetString().Should().NotBeNullOrWhiteSpace();
-		screenshot.GetProperty("displayLocalTime").GetString().Should().Be("2025-01-15 10:30:00");
-		screenshot.GetProperty("hasThumbnail").GetBoolean().Should().BeTrue();
-		screenshot.TryGetProperty("resourceUri", out _).Should().BeFalse();
-		screenshot.TryGetProperty("isThumbnail", out _).Should().BeFalse();
+			result.IsError.Should().NotBeTrue();
+
+			var doc = ParseSingleTextPayload(result);
+			var screenshot = doc.RootElement.GetProperty("screenshots")[0];
+			screenshot.GetProperty("screenshotRef").GetString().Should().NotBeNullOrWhiteSpace();
+			screenshot.GetProperty("displayLocalTime").GetString().Should().Be("2025-01-15 10:30:00");
+			screenshot.GetProperty("hasThumbnail").GetBoolean().Should().BeTrue();
+			screenshot.TryGetProperty("resourceUri", out _).Should().BeFalse();
+			screenshot.TryGetProperty("isThumbnail", out _).Should().BeFalse();
+		}
+		finally
+		{
+			if (Directory.Exists(screenshotDirectory))
+			{
+				Directory.Delete(screenshotDirectory, recursive: true);
+			}
+		}
 	}
 
 	[TestMethod]

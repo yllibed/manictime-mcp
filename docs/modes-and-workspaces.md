@@ -143,6 +143,6 @@ CLI mode is best for inspecting payloads. The workspace root flow is primarily r
 
 ## Related docs
 
-- [README](D:\src\manictime-mcp\README.md)
-- [getting-started.md](D:\src\manictime-mcp\docs\getting-started.md)
-- [mcp-client-strategy.md](D:\src\manictime-mcp\docs\mcp-client-strategy.md)
+- [README](../README.md)
+- [getting-started.md](getting-started.md)
+- [mcp-client-strategy.md](mcp-client-strategy.md)

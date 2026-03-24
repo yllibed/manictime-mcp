@@ -195,7 +195,7 @@ internal static class ManicTimeReplHandlers
 				screenshot.Info.Width,
 				screenshot.Info.Height,
 				screenshot.Info.Monitor,
-				hasThumbnail = screenshot.Info.IsThumbnail,
+				hasThumbnail = HasThumbnailVariant(screenshot.Info),
 			}).ToArray(),
 			sampling = selection.SamplingStrategyUsed.ToString().ToLowerInvariant(),
 			truncation = new
@@ -584,5 +584,16 @@ internal static class ManicTimeReplHandlers
 		}
 
 		return fileName;
+	}
+
+	private static bool HasThumbnailVariant(ScreenshotInfo screenshot)
+	{
+		if (screenshot.IsThumbnail)
+		{
+			return true;
+		}
+
+		var thumbnailPath = GetThumbnailPath(screenshot.FilePath);
+		return thumbnailPath is not null && File.Exists(thumbnailPath);
 	}
 }
