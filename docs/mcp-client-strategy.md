@@ -26,13 +26,27 @@ Use MCP in two modes:
 
 ## Local Project MCP Verification Pattern
 
-- Build/publish artifact.
-- Start process from isolated output.
+- Build or publish the artifact.
+- Start an isolated process with `mcp serve`.
 - Run protocol tests.
 - Stop process.
 - Treat ManicTime data as high-value user data at all times; verification must remain strictly read-only and safety-first.
 
+Typical development command:
+
+```bash
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- mcp serve
+```
+
+Published-package equivalent:
+
+```bash
+dnx -y ManicTimeMcp mcp serve
+```
+
 Never keep this process attached as an always-on coding MCP while changing the same repository.
+
+For the difference between MCP, CLI, and REPL usage, plus the `workspace init` soft-roots workflow, see [modes-and-workspaces.md](modes-and-workspaces.md).
 
 ## Local `.mcp.json` Policy In This Repo
 

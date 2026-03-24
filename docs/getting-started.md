@@ -24,6 +24,39 @@ dotnet pack src/ManicTimeMcp.slnx -c Release
 - The test runner is Microsoft Testing Platform (MTP), configured in the `"test"` section of `global.json`.
 - Engineering target is zero warnings as much as practical; warnings are treated as errors by default.
 
+## Local launch modes
+
+Start the MCP server during local development:
+
+```bash
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- mcp serve
+```
+
+Run the same app as a local CLI or interactive REPL:
+
+```bash
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj
+```
+
+Run one CLI command directly:
+
+```bash
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- timeline list --output:json
+```
+
+`dotnet run` requires the `--` separator before `mcp serve` or any direct CLI command so the command is forwarded to the Repl app instead of being parsed by the `dotnet` launcher.
+
+## Using the product
+
+The recommended user-facing entrypoint is now [modes-and-workspaces.md](modes-and-workspaces.md).
+
+That page explains:
+
+- when to use `MCP`, `CLI`, or `REPL`
+- how `mcp serve` differs from direct CLI use
+- how `workspace init` enables soft roots
+- how to run the screenshot workflow end to end
+
 ## Data Safety (Mandatory)
 
 - Treat ManicTime artifacts as high-value user data.
@@ -65,4 +98,5 @@ docs/                       User and contributor documentation
 
 ## For Users
 
-Implementation and package usage instructions will be added once the first runnable release candidate exists.
+- For package and client setup, start with [README](../README.md).
+- For mode selection, roots, and screenshot persistence workflows, use [modes-and-workspaces.md](modes-and-workspaces.md).

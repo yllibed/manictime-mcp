@@ -34,17 +34,30 @@
 
 - Pure logic only.
 - Parser behavior, validation rules, date normalization, limit enforcement.
+- Temporal range parsing and option-group validation for Repl-bound commands.
 
 ### Integration Tests
 
 - SQLite fixture databases for data-access behavior.
 - Filesystem fixtures for screenshot scanning and selection.
 
+### Repl Command-Surface Tests
+
+- Use `Repl.Testing` for in-memory multi-step and multi-session command tests.
+- Cover:
+  - context routing
+  - option-group binding
+  - temporal range binding and validation
+  - answer-prefill behavior via `--answer:*`
+  - screenshot save path behavior
+  - workflow-oriented command chains without process startup cost
+
 ### MCP Protocol Tests
 
 - Start server process in stdio mode.
 - Validate `initialize`, `tools/list`, `tools/call`, resource retrieval.
 - Assert structured error responses for invalid inputs.
+- Verify Repl command discovery is reflected correctly through `Repl.Mcp`.
 
 ### Performance/Memory Tests
 
@@ -69,6 +82,7 @@
 - Maintain minimal deterministic fixture DBs.
 - Keep fixture screenshot sets small but representative.
 - Add synthetic stress fixtures for high-volume cases.
+- Add Repl command-surface fixtures for repeated workflows (for example screenshot investigate -> crop -> save).
 
 ## CI Reporting and Coverage Tooling
 
@@ -95,6 +109,7 @@ This workstream can be developed independently and then wired into the CI pipeli
 - Keep fixtures versioned and documented.
 - Avoid brittle assertions on non-contract internals.
 - Prioritize deterministic tests over broad but unstable coverage.
+- Prefer `Repl.Testing` result-object assertions over brittle text-output assertions unless the rendered output is itself the contract under test.
 
 ## Exit Criteria
 

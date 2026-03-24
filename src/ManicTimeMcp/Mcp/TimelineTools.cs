@@ -2,13 +2,10 @@ using System.ComponentModel;
 using System.Text.Json;
 using ManicTimeMcp.Database;
 using Microsoft.Data.Sqlite;
-using ModelContextProtocol.Protocol;
-using ModelContextProtocol.Server;
 
 namespace ManicTimeMcp.Mcp;
 
-/// <summary>MCP tools for querying ManicTime timelines.</summary>
-[McpServerToolType]
+/// <summary>Operations for querying ManicTime timelines.</summary>
 public sealed class TimelineTools
 {
 	private readonly ITimelineRepository _timelineRepository;
@@ -20,9 +17,9 @@ public sealed class TimelineTools
 	}
 
 	/// <summary>Returns all available ManicTime timelines.</summary>
-	[McpServerTool(Name = "get_timelines", ReadOnly = true), Description("List all available ManicTime timelines with their schema types.")]
+	[Description("List all available ManicTime timelines with their schema types.")]
 #pragma warning disable IL2026 // Trimming is disabled (PublishTrimmed=false); reflection-based JSON is safe
-	public async Task<CallToolResult> GetTimelinesAsync(CancellationToken cancellationToken)
+	public async Task<ToolInvocationResult> GetTimelinesAsync(CancellationToken cancellationToken)
 	{
 		try
 		{
@@ -42,7 +39,7 @@ public sealed class TimelineTools
 		}
 		catch (SqliteException ex)
 		{
-			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://health resource to diagnose the issue.");
+			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://resource/health resource to diagnose the issue.");
 		}
 		catch (InvalidOperationException ex)
 		{

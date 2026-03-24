@@ -27,6 +27,8 @@
 - Support Windows-specific RID packaging for primary usage (`win-x64`, `win-arm64`) plus `any` as cross-platform host fallback.
 - Non-Windows host execution (for example WSL) is compatibility mode only and requires explicit data directory configuration (`MANICTIME_DATA_DIR`).
 - Be invocable through both `dotnet tool` and `dnx`-based MCP configs.
+- Support the Repl-first launch path `mcp serve` for published MCP hosting.
+- Support local development launch through `dotnet run --project ... -- mcp serve`.
 - Use central package management (`Directory.Packages.props`).
 - Use `.slnx` as the solution format.
 - Pin SDK using `global.json` (`10.x` SDK).
@@ -68,6 +70,9 @@
 - Package versions are forbidden inside individual `.csproj` files unless explicitly exempted.
 - `global.json` is mandatory and pinned to .NET 10 SDK.
 - Nerdbank.GitVersioning config (`version.json`) is mandatory for version metadata.
+- `.mcp/server.json` is mandatory and must describe the published `dnx` launch in structured form:
+  - `runtimeArguments` for launcher flags such as `-y`
+  - `packageArguments` for the package command path such as `mcp serve`
 - Reproducible build defaults in `Directory.Build.props`:
   - `ContinuousIntegrationBuild=true`
   - `Deterministic=true`
@@ -80,6 +85,22 @@
 - NativeAOT is a separate opt-in profile, enabled only after contract/integration tests pass.
 - Trimming remains disabled by default in v1.
 
+### Launch examples
+
+Published package:
+
+```bash
+dnx -y ManicTimeMcp mcp serve
+```
+
+Local development:
+
+```bash
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- mcp serve
+```
+
+`dotnet run` requires the `--` separator because those arguments belong to the application, not the `dotnet` launcher itself. JSON client configs and `.mcp/server.json` do not use a literal `--` because their arguments are already split structurally.
+
 ## Implementation Autonomy
 
 This workstream is implementation-ready without database or tool logic. It can produce a runnable shell package and deployment pipeline.
@@ -90,6 +111,7 @@ This workstream is implementation-ready without database or tool logic. It can p
 - Startup benchmark: process launch to MCP `initialize` completion.
 - Memory baseline: idle memory and first-request memory.
 - Packaging test: install/run via both `dotnet tool` and `dnx` configuration.
+- Packaging test: verify the packaged `.mcp/server.json` launches the server through `mcp serve` using `runtimeArguments` + `packageArguments`.
 - Verify central package management restore consistency in CI.
 - Verify `.slnx` build/test/pack orchestration works end-to-end.
 - Verify both Windows RID packages and `any` fallback package paths.

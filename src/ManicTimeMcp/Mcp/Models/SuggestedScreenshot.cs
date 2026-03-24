@@ -3,7 +3,7 @@ namespace ManicTimeMcp.Mcp.Models;
 /// <summary>A curated screenshot suggestion for narrative reports.</summary>
 internal sealed class SuggestedScreenshot
 {
-	/// <summary>Screenshot reference for use with get_screenshot.</summary>
+	/// <summary>Screenshot reference for use with screenshot get.</summary>
 	public required string ScreenshotRef { get; init; }
 
 	/// <summary>Timestamp of the segment (local time, yyyy-MM-dd HH:mm:ss).</summary>

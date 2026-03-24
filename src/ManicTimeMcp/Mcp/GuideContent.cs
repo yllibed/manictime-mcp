@@ -1,6 +1,6 @@
 namespace ManicTimeMcp.Mcp;
 
-/// <summary>Static guide text for the manictime://guide resource.</summary>
+/// <summary>Static guide text for the manictime://resource/guide resource.</summary>
 internal static class GuideContent
 {
 	internal static string Text { get; } = """
@@ -8,56 +8,56 @@ internal static class GuideContent
 
 		## Tool Inventory
 
-		| Tool | Purpose | Best For |
-		|---|---|---|
-		| get_timelines | List available timelines | Discovery |
-		| get_activities | Raw activity data with enriched fields | Drill-down |
-		| get_application_usage | App usage from pre-aggregated tables | Usage analysis |
-		| get_document_usage | Document usage from pre-aggregated tables | File tracking |
-		| get_computer_usage | Computer on/off periods | Availability |
-		| get_tags | User-defined tags | Categorization |
-		| get_activity_narrative | Structured "what did I do?" | Single-day recap |
-		| get_period_summary | Multi-day overview with patterns | Weekly/monthly review |
-		| get_daily_summary | Daily activity summary (single-call recap) | Quick daily overview |
-		| get_website_usage | Website usage with hourly/daily breakdown | Web tracking |
-		| list_screenshots | Screenshot metadata (zero bytes) | Discovery |
-		| get_screenshot | Single screenshot (dual-audience) | Visual inspection |
-		| crop_screenshot | Region crop from screenshot | Detail extraction |
-		| save_screenshot | Save screenshot to disk (within MCP roots) | Report assets |
+		| Repl Route | MCP Tool | Purpose | Best For |
+		|---|---|---|---|
+		| timeline list | timeline_list | List available timelines | Discovery |
+		| activity list | activity_list | Raw activity data with enriched fields | Drill-down |
+		| usage applications | usage_applications | App usage from pre-aggregated tables | Usage analysis |
+		| usage documents | usage_documents | Document usage from pre-aggregated tables | File tracking |
+		| activity computer-usage | activity_computer-usage | Computer on/off periods | Availability |
+		| activity tags | activity_tags | User-defined tags | Categorization |
+		| summary narrative | summary_narrative | Structured "what did I do?" | Single-day recap |
+		| summary period | summary_period | Multi-day overview with patterns | Weekly/monthly review |
+		| summary daily | summary_daily | Daily activity summary (single-call recap) | Quick daily overview |
+		| usage websites | usage_websites | Website usage with hourly or daily breakdown | Web tracking |
+		| screenshot list | screenshot_list | Screenshot metadata (zero image bytes) | Discovery |
+		| screenshot get | screenshot_get | Single screenshot payload | Visual inspection |
+		| screenshot crop | screenshot_crop | Region crop from screenshot | Detail extraction |
+		| screenshot save | screenshot_save | Save a screenshot to disk (within MCP roots) | Report assets |
 
 		## Decision Tree
 
-		- "What did I do today/yesterday?" -> get_activity_narrative (check suggestedScreenshots for visual context)
-		- "How was my week/month?" -> get_period_summary
-		- "What websites did I use?" -> get_website_usage
-		- "What was I doing at 3pm?" -> get_activities (narrow range) + list_screenshots
-		- "Show me screenshots" -> list_screenshots -> get_screenshot -> crop_screenshot -> save_screenshot
-		- "What apps do I use most?" -> get_application_usage
+		- "What did I do today/yesterday?" -> summary narrative (`summary_narrative` in MCP) and check suggested screenshots for visual context.
+		- "How was my week/month?" -> summary period (`summary_period` in MCP).
+		- "What websites did I use?" -> usage websites (`usage_websites` in MCP).
+		- "What was I doing at 3pm?" -> activity list (`activity_list` in MCP) for a narrow period, then screenshot list.
+		- "Show me screenshots" -> screenshot list -> screenshot get -> screenshot crop -> screenshot save.
+		- "What apps do I use most?" -> usage applications (`usage_applications` in MCP).
 
 		## Playbooks
 
 		### Daily Recap
-		1. get_daily_summary(date=DATE, includeHourlyWebBreakdown=true) — single call for segments, top apps, websites, and hourly web detail
-		2. If suggestedScreenshots are present, call get_screenshot for 2-3 of them
-		3. Inspect each thumbnail and use crop_screenshot to extract the active window or focused content — crops are sharper and more meaningful for reports
-		4. Use save_screenshot to persist the best crops to the project assets folder for embedding in markdown reports
-		5. Present segments, top apps, total active time with cropped visuals
+		1. Run summary daily (`summary_daily` in MCP) for the target date with hourly web detail enabled.
+		2. If suggested screenshots are present, call screenshot get for 2-3 of them.
+		3. Inspect each thumbnail and use screenshot crop to extract the active window or focused content. Crops are sharper and more meaningful for reports.
+		4. Use screenshot save to persist the best crops to the project assets folder for embedding in markdown reports.
+		5. Present segments, top apps, total active time, and the best cropped visuals.
 
 		### Weekly Recap
-		1. get_period_summary(startDate=MONDAY, endDate=NEXT_MONDAY)
-		2. Present busiest/quietest days, day-of-week patterns, top apps
+		1. Run summary period (`summary_period` in MCP) for the selected Repl date range.
+		2. Present busiest and quietest days, repeated patterns, and top apps/websites.
 
 		### Screenshot Investigation
-		1. list_screenshots(startDate, endDate, samplingStrategy="activity_transition")
-		2. get_screenshot(screenshotRef) for the most relevant screenshot
-		3. Inspect the thumbnail (model sees it via dual-audience)
-		4. If a region needs detail: crop_screenshot(screenshotRef, x, y, width, height)
-		5. Combine with get_activity_narrative for context
+		1. Run screenshot list (`screenshot_list` in MCP) for the relevant Repl date-time window.
+		2. Fetch the most relevant screenshot with screenshot get.
+		3. Inspect the image payload or thumbnail preview.
+		4. If a region needs detail, run screenshot crop with the region coordinates.
+		5. Combine the screenshot evidence with summary narrative for surrounding activity context.
 
 		### "Why No Screenshots?" Diagnostics
-		1. list_screenshots — check diagnostics.reasonCode and remediationHint
-		2. Read manictime://health to check screenshot directory status
-		3. Read manictime://data-range to verify data exists for the period
+		1. Run screenshot list and inspect diagnostics and truncation data.
+		2. Read manictime://resource/health to check screenshot directory status.
+		3. Read manictime://resource/data-range to verify that data exists for the period.
 
 		## Data Model
 
@@ -76,19 +76,19 @@ internal static class GuideContent
 
 		## Communication Guidance
 
-		- When suggestedScreenshots are provided, fetch 2-3 with get_screenshot, then use crop_screenshot to extract the active window or key content region — include these crops in your response as visual anchors (they are full-resolution and far more readable than full-screen thumbnails)
-		- Use resolved display names (from CommonGroup) in user-facing responses
-		- Use Color values for visual formatting cues
-		- Key values (e.g., "chrome.exe") are internal — use Name for display
-		- Keep screenshotRef values for tool chaining only, not user display
+		- When suggested screenshots are provided, fetch 2-3 with screenshot get, then use screenshot crop to extract the active window or key content region. Include these crops in your response as visual anchors because they are much more readable than full-screen thumbnails.
+		- Use resolved display names from CommonGroup in user-facing responses.
+		- Use Color values for visual formatting cues when available.
+		- Key values such as `chrome.exe` are internal identifiers. Use Name for display.
+		- Keep screenshotRef values for tool chaining only, not user display.
 
 		## Screenshot Workflow
 
-		- Always discover via list_screenshots first
-		- get_screenshot returns dual-audience: model sees thumbnail, human sees full image
-		- crop_screenshot uses percentage coordinates (0-100) by default
-		- Coordinates are resolution-independent (same region regardless of thumbnail vs full-size)
-		- save_screenshot writes to disk within MCP client roots (requires client roots capability)
-		- Full pipeline: list_screenshots -> get_screenshot -> crop_screenshot -> save_screenshot
+		- Always discover screenshots via screenshot list first.
+		- screenshot get returns metadata plus image payloads encoded as base64 text.
+		- screenshot crop uses percentage coordinates (0-100) by default.
+		- Coordinates are resolution-independent, so the same region works regardless of thumbnail vs full-size rendering.
+		- screenshot save writes to disk within MCP client roots and requires roots support from the client.
+		- Full pipeline: screenshot list -> screenshot get -> screenshot crop -> screenshot save.
 		""";
 }

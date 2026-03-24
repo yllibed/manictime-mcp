@@ -61,8 +61,8 @@ public sealed class StdioTransportTests
 		// Stdout must be clean — no log lines that would corrupt the MCP protocol.
 		stdout.Should().BeEmpty("stdout must be reserved for JSON-RPC messages");
 
-		// Stderr should contain the expected log output.
-		stderr.Should().Contain("ManicTimeMcp", "log output should go to stderr");
+		// Stderr may be empty, but it must never contain protocol traffic.
+		stderr.Should().NotContain("\"jsonrpc\"", "protocol traffic must stay on stdout");
 	}
 
 	[TestMethod]
@@ -107,6 +107,43 @@ public sealed class StdioTransportTests
 
 		// It must NOT contain log text.
 		responseLine.Should().NotContain("info:", "stdout must not contain log output");
+	}
+
+	[TestMethod]
+	public async Task Stdout_ReturnsInitializeResponse_WhenMcpServeSubcommandIsUsed()
+	{
+		var exePath = GetServerExePath();
+
+		using var process = new Process();
+		process.StartInfo = new ProcessStartInfo
+		{
+			FileName = exePath,
+			Arguments = "mcp serve",
+			RedirectStandardInput = true,
+			RedirectStandardOutput = true,
+			RedirectStandardError = true,
+			UseShellExecute = false,
+			CreateNoWindow = true,
+		};
+
+		process.Start();
+
+		const string initializeRequest = """
+			{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+			""";
+
+		await process.StandardInput.WriteLineAsync(initializeRequest.Trim()).ConfigureAwait(false);
+		await process.StandardInput.FlushAsync().ConfigureAwait(false);
+
+		using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+		var responseLine = await ReadLineWithTimeoutAsync(process.StandardOutput, cts.Token).ConfigureAwait(false);
+
+		process.StandardInput.Close();
+		await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
+
+		responseLine.Should().NotBeNullOrEmpty("server should return an initialize response when launched through mcp serve");
+		responseLine.Should().Contain("\"jsonrpc\"");
+		responseLine.Should().Contain("\"protocolVersion\"");
 	}
 
 	private static async Task<string?> ReadLineWithTimeoutAsync(StreamReader reader, CancellationToken ct)

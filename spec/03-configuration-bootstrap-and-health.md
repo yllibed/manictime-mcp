@@ -22,7 +22,7 @@
 - Resolve data directory through deterministic fallback order.
 - Validate required files before MCP server becomes fully available.
 - Emit warnings for non-fatal conditions and fail fast for fatal conditions.
-- Expose a health payload through `manictime://health`.
+- Expose a health payload through `manictime://resource/health`.
 - Expose installation/configuration issues in a model-consumable shape so clients can surface actionable remediation to the end user.
 
 ## Non-Functional Requirements

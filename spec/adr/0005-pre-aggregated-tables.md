@@ -82,7 +82,7 @@ Raw `Ar_Activity` queries remain available for:
 
 ### Positive
 
-- Summary queries (`get_activity_narrative`, `get_period_summary`, `get_website_usage`) become ~10x faster.
+- Summary queries (`summary narrative`, `summary period`, `usage websites`) become ~10x faster.
 - Reduced database I/O and memory allocation for common operations.
 - Enables responsive MCP interactions for the "what did I do yesterday?" pattern.
 - `Ar_CommonGroup` join provides resolved names and colors without additional lookups.

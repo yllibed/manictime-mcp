@@ -13,6 +13,7 @@ This project is still in **specification mode**. No production implementation de
 
 - Independent workstreams with clear contracts.
 - Specification-first development.
+- Repl-first public surface: local CLI and REPL behavior define the command graph, and MCP contracts are derived from that graph.
 - Read-only interaction with ManicTime files.
 - Performance and memory optimization as first-class requirements.
 - Maintainability over short-term convenience.
