@@ -52,7 +52,7 @@ public sealed class CorrelationRepository : ICorrelationRepository
 					FROM Ar_Activity a
 					JOIN Ar_Timeline t ON a.ReportId = t.ReportId
 					LEFT JOIN Ar_Group g ON a.GroupId = g.GroupId AND a.ReportId = g.ReportId
-					LEFT JOIN Ar_CommonGroup cg ON a.CommonGroupId = cg.CommonGroupId
+					LEFT JOIN Ar_CommonGroup cg ON a.CommonGroupId = cg.CommonId
 					WHERE a.StartLocalTime < @endLocalTime AND a.EndLocalTime > @startLocalTime
 					ORDER BY a.StartLocalTime, t.SchemaName
 					LIMIT @limit

@@ -49,31 +49,31 @@ public static class SchemaManifest
 	{
 		tables["Ar_CommonGroup"] = new(
 			"Ar_CommonGroup",
-			["CommonGroupId", "Name", "Color", "Key"],
+			["CommonId", "Name", "Color", "Key"],
 			TableTier.Supplemental);
 
-		tables["Ar_ApplicationByDay"] = new("Ar_ApplicationByDay", ["Day", "CommonGroupId", "TotalSeconds"], TableTier.Supplemental);
-		tables["Ar_WebSiteByDay"] = new("Ar_WebSiteByDay", ["Day", "CommonGroupId", "TotalSeconds"], TableTier.Supplemental);
-		tables["Ar_DocumentByDay"] = new("Ar_DocumentByDay", ["Day", "CommonGroupId", "TotalSeconds"], TableTier.Supplemental);
-		tables["Ar_ApplicationByYear"] = new("Ar_ApplicationByYear", ["Day", "CommonGroupId", "TotalSeconds"], TableTier.Supplemental);
-		tables["Ar_WebSiteByYear"] = new("Ar_WebSiteByYear", ["Day", "CommonGroupId", "TotalSeconds"], TableTier.Supplemental);
-		tables["Ar_DocumentByYear"] = new("Ar_DocumentByYear", ["Day", "CommonGroupId", "TotalSeconds"], TableTier.Supplemental);
+		tables["Ar_ApplicationByDay"] = new("Ar_ApplicationByDay", ["Hour", "CommonId", "TotalSeconds"], TableTier.Supplemental);
+		tables["Ar_WebSiteByDay"] = new("Ar_WebSiteByDay", ["Hour", "CommonId", "TotalSeconds"], TableTier.Supplemental);
+		tables["Ar_DocumentByDay"] = new("Ar_DocumentByDay", ["Hour", "CommonId", "TotalSeconds"], TableTier.Supplemental);
+		tables["Ar_ApplicationByYear"] = new("Ar_ApplicationByYear", ["Hour", "CommonId", "TotalSeconds"], TableTier.Supplemental);
+		tables["Ar_WebSiteByYear"] = new("Ar_WebSiteByYear", ["Hour", "CommonId", "TotalSeconds"], TableTier.Supplemental);
+		tables["Ar_DocumentByYear"] = new("Ar_DocumentByYear", ["Hour", "CommonId", "TotalSeconds"], TableTier.Supplemental);
 
 		tables["Ar_ActivityByHour"] = new(
 			"Ar_ActivityByHour",
-			["Day", "Hour", "CommonGroupId", "TotalSeconds"],
+			["ReportId", "Hour", "ActivityId"],
 			TableTier.Supplemental);
 
 		tables["Ar_TimelineSummary"] = new("Ar_TimelineSummary", ["ReportId", "StartLocalTime", "EndLocalTime"], TableTier.Supplemental);
 		tables["Ar_Environment"] = new("Ar_Environment", ["EnvironmentId", "DeviceName"], TableTier.Supplemental);
 		tables["Ar_Folder"] = new("Ar_Folder", ["FolderId", "Name"], TableTier.Supplemental);
-		tables["Ar_Tag"] = new("Ar_Tag", ["TagId", "Name"], TableTier.Supplemental);
-		tables["Ar_ActivityTag"] = new("Ar_ActivityTag", ["ActivityId", "TagId"], TableTier.Supplemental);
+		tables["Ar_TagListByDay"] = new("Ar_TagListByDay", ["ReportId", "Hour", "CommonId", "TotalSeconds"], TableTier.Supplemental);
+		tables["Ar_TagListByYear"] = new("Ar_TagListByYear", ["ReportId", "Hour", "CommonId", "TotalSeconds"], TableTier.Supplemental);
 	}
 
 	private static void AddInformationalTables(Dictionary<string, TableDefinition> tables)
 	{
 		tables["Ar_Category"] = new("Ar_Category", ["CategoryId", "Name"], TableTier.Informational);
-		tables["Ar_CategoryGroup"] = new("Ar_CategoryGroup", ["CategoryGroupId", "Name"], TableTier.Informational);
+		tables["Ar_CategoryGroup"] = new("Ar_CategoryGroup", ["CategoryGroupId", "CategoryId"], TableTier.Informational);
 	}
 }

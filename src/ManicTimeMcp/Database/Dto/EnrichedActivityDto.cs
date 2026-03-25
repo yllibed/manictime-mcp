@@ -36,6 +36,4 @@ public sealed record EnrichedActivityDto
 	/// <summary>Common group display name from Ar_CommonGroup, or null if unavailable.</summary>
 	public string? CommonGroupName { get; init; }
 
-	/// <summary>Tags associated with this activity, or null if tag tables unavailable.</summary>
-	public string[]? Tags { get; init; }
 }

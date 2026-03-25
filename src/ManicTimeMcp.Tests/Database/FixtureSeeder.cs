@@ -78,10 +78,10 @@ internal static class FixtureSeeder
 		// Application by year
 		InsertDailyUsage(connection, "Ar_ApplicationByYear", "2025-01-15", commonGroupId: 1, totalSeconds: 7200);
 
-		// Activity by hour
-		InsertHourlyUsage(connection, "2025-01-15", hour: 8, commonGroupId: 1, totalSeconds: 3600);
-		InsertHourlyUsage(connection, "2025-01-15", hour: 9, commonGroupId: 1, totalSeconds: 3600);
-		InsertHourlyUsage(connection, "2025-01-15", hour: 10, commonGroupId: 2, totalSeconds: 3600);
+		// Activity by hour (index: maps activities to the hours they span)
+		InsertHourlyUsage(connection, reportId: 2, hour: "2025-01-15 08:00:00", activityId: 3);
+		InsertHourlyUsage(connection, reportId: 2, hour: "2025-01-15 09:00:00", activityId: 3);
+		InsertHourlyUsage(connection, reportId: 2, hour: "2025-01-15 10:00:00", activityId: 4);
 
 		// Timeline summary
 		InsertTimelineSummary(connection, reportId: 1, start: "2025-01-15 08:00:00", end: "2025-01-15 17:30:00");
@@ -89,12 +89,6 @@ internal static class FixtureSeeder
 
 		// Environment
 		InsertEnvironment(connection, environmentId: 1, deviceName: "WORKSTATION-01");
-
-		// Tags
-		InsertTag(connection, tagId: 1, name: "coding");
-		InsertTag(connection, tagId: 2, name: "browsing");
-		InsertActivityTag(connection, activityId: 3, tagId: 1);
-		InsertActivityTag(connection, activityId: 4, tagId: 2);
 	}
 
 	/// <summary>Seeds both standard and supplemental data.</summary>
@@ -282,7 +276,7 @@ internal static class FixtureSeeder
 	private static void InsertCommonGroup(SqliteConnection connection, long commonGroupId, string name, string? color, string? key)
 	{
 		using var command = connection.CreateCommand();
-		command.CommandText = "INSERT INTO Ar_CommonGroup (CommonGroupId, Name, Color, Key) VALUES (@id, @name, @color, @key)";
+		command.CommandText = "INSERT INTO Ar_CommonGroup (CommonId, Name, Color, Key) VALUES (@id, @name, @color, @key)";
 		command.Parameters.AddWithValue("@id", commonGroupId);
 		command.Parameters.AddWithValue("@name", name);
 		command.Parameters.AddWithValue("@color", color is not null ? color : DBNull.Value);
@@ -293,21 +287,20 @@ internal static class FixtureSeeder
 	private static void InsertDailyUsage(SqliteConnection connection, string tableName, string day, long commonGroupId, double totalSeconds)
 	{
 		using var command = connection.CreateCommand();
-		command.CommandText = $"INSERT INTO {tableName} (Day, CommonGroupId, TotalSeconds) VALUES (@day, @cgId, @total)";
+		command.CommandText = $"INSERT INTO {tableName} (Hour, CommonId, TotalSeconds) VALUES (@day, @cgId, @total)";
 		command.Parameters.AddWithValue("@day", day);
 		command.Parameters.AddWithValue("@cgId", commonGroupId);
 		command.Parameters.AddWithValue("@total", totalSeconds);
 		command.ExecuteNonQuery();
 	}
 
-	private static void InsertHourlyUsage(SqliteConnection connection, string day, int hour, long commonGroupId, double totalSeconds)
+	private static void InsertHourlyUsage(SqliteConnection connection, long reportId, string hour, long activityId)
 	{
 		using var command = connection.CreateCommand();
-		command.CommandText = "INSERT INTO Ar_ActivityByHour (Day, Hour, CommonGroupId, TotalSeconds) VALUES (@day, @hour, @cgId, @total)";
-		command.Parameters.AddWithValue("@day", day);
+		command.CommandText = "INSERT INTO Ar_ActivityByHour (ReportId, Hour, ActivityId) VALUES (@report, @hour, @actId)";
+		command.Parameters.AddWithValue("@report", reportId);
 		command.Parameters.AddWithValue("@hour", hour);
-		command.Parameters.AddWithValue("@cgId", commonGroupId);
-		command.Parameters.AddWithValue("@total", totalSeconds);
+		command.Parameters.AddWithValue("@actId", activityId);
 		command.ExecuteNonQuery();
 	}
 
@@ -330,21 +323,4 @@ internal static class FixtureSeeder
 		command.ExecuteNonQuery();
 	}
 
-	internal static void InsertTag(SqliteConnection connection, long tagId, string name)
-	{
-		using var command = connection.CreateCommand();
-		command.CommandText = "INSERT INTO Ar_Tag (TagId, Name) VALUES (@id, @name)";
-		command.Parameters.AddWithValue("@id", tagId);
-		command.Parameters.AddWithValue("@name", name);
-		command.ExecuteNonQuery();
-	}
-
-	internal static void InsertActivityTag(SqliteConnection connection, long activityId, long tagId)
-	{
-		using var command = connection.CreateCommand();
-		command.CommandText = "INSERT INTO Ar_ActivityTag (ActivityId, TagId) VALUES (@actId, @tagId)";
-		command.Parameters.AddWithValue("@actId", activityId);
-		command.Parameters.AddWithValue("@tagId", tagId);
-		command.ExecuteNonQuery();
-	}
 }

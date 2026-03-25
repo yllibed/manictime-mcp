@@ -96,8 +96,8 @@ public sealed class SchemaManifestTests
 	[TestMethod]
 	public void Tables_ContainsTagTables()
 	{
-		SchemaManifest.Tables.Should().ContainKey("Ar_Tag");
-		SchemaManifest.Tables.Should().ContainKey("Ar_ActivityTag");
+		SchemaManifest.Tables.Should().ContainKey("Ar_TagListByDay");
+		SchemaManifest.Tables.Should().ContainKey("Ar_TagListByYear");
 	}
 
 	[TestMethod]

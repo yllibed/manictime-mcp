@@ -102,8 +102,8 @@ internal sealed class FixtureDatabase : IDisposable
 		new("Ar_TimelineSummary", CreateTimelineSummaryTable),
 		new("Ar_Environment", CreateEnvironmentTable),
 		new("Ar_Folder", CreateFolderTable),
-		new("Ar_Tag", CreateTagTable),
-		new("Ar_ActivityTag", CreateActivityTagTable),
+		new("Ar_TagListByDay", CreateTagListByDayTable),
+		new("Ar_TagListByYear", CreateTagListByYearTable),
 		new("Ar_Category", CreateCategoryTable),
 		new("Ar_CategoryGroup", CreateCategoryGroupTable),
 	];
@@ -274,15 +274,15 @@ internal sealed class FixtureDatabase : IDisposable
 		CreateTimelineSummaryTable(connection);
 		CreateEnvironmentTable(connection);
 		CreateFolderTable(connection);
-		CreateTagTable(connection);
-		CreateActivityTagTable(connection);
+		CreateTagListByDayTable(connection);
+		CreateTagListByYearTable(connection);
 	}
 
 	private static void CreateCommonGroupTable(SqliteConnection connection)
 	{
 		Execute(connection, """
 			CREATE TABLE Ar_CommonGroup (
-				CommonGroupId INTEGER PRIMARY KEY,
+				CommonId INTEGER PRIMARY KEY,
 				Name TEXT NOT NULL,
 				Color TEXT,
 				Key TEXT
@@ -294,8 +294,8 @@ internal sealed class FixtureDatabase : IDisposable
 	{
 		Execute(connection, """
 			CREATE TABLE Ar_ApplicationByDay (
-				Day TEXT NOT NULL,
-				CommonGroupId INTEGER NOT NULL,
+				Hour TEXT NOT NULL,
+				CommonId INTEGER NOT NULL,
 				TotalSeconds REAL NOT NULL
 			)
 			""");
@@ -305,8 +305,8 @@ internal sealed class FixtureDatabase : IDisposable
 	{
 		Execute(connection, """
 			CREATE TABLE Ar_WebSiteByDay (
-				Day TEXT NOT NULL,
-				CommonGroupId INTEGER NOT NULL,
+				Hour TEXT NOT NULL,
+				CommonId INTEGER NOT NULL,
 				TotalSeconds REAL NOT NULL
 			)
 			""");
@@ -316,8 +316,8 @@ internal sealed class FixtureDatabase : IDisposable
 	{
 		Execute(connection, """
 			CREATE TABLE Ar_DocumentByDay (
-				Day TEXT NOT NULL,
-				CommonGroupId INTEGER NOT NULL,
+				Hour TEXT NOT NULL,
+				CommonId INTEGER NOT NULL,
 				TotalSeconds REAL NOT NULL
 			)
 			""");
@@ -327,8 +327,8 @@ internal sealed class FixtureDatabase : IDisposable
 	{
 		Execute(connection, """
 			CREATE TABLE Ar_ApplicationByYear (
-				Day TEXT NOT NULL,
-				CommonGroupId INTEGER NOT NULL,
+				Hour TEXT NOT NULL,
+				CommonId INTEGER NOT NULL,
 				TotalSeconds REAL NOT NULL
 			)
 			""");
@@ -338,8 +338,8 @@ internal sealed class FixtureDatabase : IDisposable
 	{
 		Execute(connection, """
 			CREATE TABLE Ar_WebSiteByYear (
-				Day TEXT NOT NULL,
-				CommonGroupId INTEGER NOT NULL,
+				Hour TEXT NOT NULL,
+				CommonId INTEGER NOT NULL,
 				TotalSeconds REAL NOT NULL
 			)
 			""");
@@ -349,8 +349,8 @@ internal sealed class FixtureDatabase : IDisposable
 	{
 		Execute(connection, """
 			CREATE TABLE Ar_DocumentByYear (
-				Day TEXT NOT NULL,
-				CommonGroupId INTEGER NOT NULL,
+				Hour TEXT NOT NULL,
+				CommonId INTEGER NOT NULL,
 				TotalSeconds REAL NOT NULL
 			)
 			""");
@@ -360,10 +360,9 @@ internal sealed class FixtureDatabase : IDisposable
 	{
 		Execute(connection, """
 			CREATE TABLE Ar_ActivityByHour (
-				Day TEXT NOT NULL,
-				Hour INTEGER NOT NULL,
-				CommonGroupId INTEGER NOT NULL,
-				TotalSeconds REAL NOT NULL
+				ReportId INTEGER NOT NULL,
+				Hour TEXT NOT NULL,
+				ActivityId INTEGER NOT NULL
 			)
 			""");
 	}
@@ -399,22 +398,26 @@ internal sealed class FixtureDatabase : IDisposable
 			""");
 	}
 
-	private static void CreateTagTable(SqliteConnection connection)
+	private static void CreateTagListByDayTable(SqliteConnection connection)
 	{
 		Execute(connection, """
-			CREATE TABLE Ar_Tag (
-				TagId INTEGER PRIMARY KEY,
-				Name TEXT NOT NULL
+			CREATE TABLE Ar_TagListByDay (
+				ReportId INTEGER NOT NULL,
+				Hour TEXT NOT NULL,
+				CommonId INTEGER NOT NULL,
+				TotalSeconds REAL NOT NULL
 			)
 			""");
 	}
 
-	private static void CreateActivityTagTable(SqliteConnection connection)
+	private static void CreateTagListByYearTable(SqliteConnection connection)
 	{
 		Execute(connection, """
-			CREATE TABLE Ar_ActivityTag (
-				ActivityId INTEGER NOT NULL,
-				TagId INTEGER NOT NULL
+			CREATE TABLE Ar_TagListByYear (
+				ReportId INTEGER NOT NULL,
+				Hour TEXT NOT NULL,
+				CommonId INTEGER NOT NULL,
+				TotalSeconds REAL NOT NULL
 			)
 			""");
 	}
@@ -442,7 +445,7 @@ internal sealed class FixtureDatabase : IDisposable
 		Execute(connection, """
 			CREATE TABLE Ar_CategoryGroup (
 				CategoryGroupId INTEGER PRIMARY KEY,
-				Name TEXT NOT NULL
+				CategoryId INTEGER NOT NULL
 			)
 			""");
 	}
@@ -454,21 +457,21 @@ internal sealed class FixtureDatabase : IDisposable
 		["Ar_Timeline"] = ["ReportId INTEGER PRIMARY KEY", "SchemaName TEXT NOT NULL", "BaseSchemaName TEXT NOT NULL"],
 		["Ar_Activity"] = ["ActivityId INTEGER PRIMARY KEY", "ReportId INTEGER NOT NULL", "StartLocalTime TEXT NOT NULL", "EndLocalTime TEXT NOT NULL", "Name TEXT", "GroupId INTEGER", "Notes TEXT", "IsActive INTEGER DEFAULT 1", "CommonGroupId INTEGER", "StartUtcTime TEXT", "EndUtcTime TEXT"],
 		["Ar_Group"] = ["GroupId INTEGER NOT NULL", "ReportId INTEGER NOT NULL", "Name TEXT NOT NULL", "Color TEXT", "Key TEXT", "CommonId INTEGER", "GroupType TEXT"],
-		["Ar_CommonGroup"] = ["CommonGroupId INTEGER PRIMARY KEY", "Name TEXT NOT NULL", "Color TEXT", "Key TEXT"],
-		["Ar_ApplicationByDay"] = ["Day TEXT NOT NULL", "CommonGroupId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
-		["Ar_WebSiteByDay"] = ["Day TEXT NOT NULL", "CommonGroupId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
-		["Ar_DocumentByDay"] = ["Day TEXT NOT NULL", "CommonGroupId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
-		["Ar_ApplicationByYear"] = ["Day TEXT NOT NULL", "CommonGroupId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
-		["Ar_WebSiteByYear"] = ["Day TEXT NOT NULL", "CommonGroupId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
-		["Ar_DocumentByYear"] = ["Day TEXT NOT NULL", "CommonGroupId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
-		["Ar_ActivityByHour"] = ["Day TEXT NOT NULL", "Hour INTEGER NOT NULL", "CommonGroupId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
+		["Ar_CommonGroup"] = ["CommonId INTEGER PRIMARY KEY", "Name TEXT NOT NULL", "Color TEXT", "Key TEXT"],
+		["Ar_ApplicationByDay"] = ["Hour TEXT NOT NULL", "CommonId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
+		["Ar_WebSiteByDay"] = ["Hour TEXT NOT NULL", "CommonId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
+		["Ar_DocumentByDay"] = ["Hour TEXT NOT NULL", "CommonId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
+		["Ar_ApplicationByYear"] = ["Hour TEXT NOT NULL", "CommonId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
+		["Ar_WebSiteByYear"] = ["Hour TEXT NOT NULL", "CommonId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
+		["Ar_DocumentByYear"] = ["Hour TEXT NOT NULL", "CommonId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
+		["Ar_ActivityByHour"] = ["ReportId INTEGER NOT NULL", "Hour TEXT NOT NULL", "ActivityId INTEGER NOT NULL"],
 		["Ar_TimelineSummary"] = ["ReportId INTEGER NOT NULL", "StartLocalTime TEXT NOT NULL", "EndLocalTime TEXT NOT NULL"],
 		["Ar_Environment"] = ["EnvironmentId INTEGER PRIMARY KEY", "DeviceName TEXT NOT NULL"],
 		["Ar_Folder"] = ["FolderId INTEGER PRIMARY KEY", "Name TEXT NOT NULL"],
-		["Ar_Tag"] = ["TagId INTEGER PRIMARY KEY", "Name TEXT NOT NULL"],
-		["Ar_ActivityTag"] = ["ActivityId INTEGER NOT NULL", "TagId INTEGER NOT NULL"],
+		["Ar_TagListByDay"] = ["ReportId INTEGER NOT NULL", "Hour TEXT NOT NULL", "CommonId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
+		["Ar_TagListByYear"] = ["ReportId INTEGER NOT NULL", "Hour TEXT NOT NULL", "CommonId INTEGER NOT NULL", "TotalSeconds REAL NOT NULL"],
 		["Ar_Category"] = ["CategoryId INTEGER PRIMARY KEY", "Name TEXT NOT NULL"],
-		["Ar_CategoryGroup"] = ["CategoryGroupId INTEGER PRIMARY KEY", "Name TEXT NOT NULL"],
+		["Ar_CategoryGroup"] = ["CategoryGroupId INTEGER PRIMARY KEY", "CategoryId INTEGER NOT NULL"],
 	};
 
 	private static void CreateTableWithout(SqliteConnection connection, string tableName, string columnToOmit)

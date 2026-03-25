@@ -36,7 +36,6 @@ public sealed class NarrativeToolsTests
 			Name = "VS Code",
 			GroupId = null,
 			CommonGroupName = "Visual Studio Code",
-			Tags = ["coding", "work"],
 		},
 		new()
 		{
@@ -281,8 +280,8 @@ public sealed class NarrativeToolsTests
 			"Ar_TimelineSummary",
 			"Ar_Environment",
 			"Ar_Folder",
-			"Ar_Tag",
-			"Ar_ActivityTag",
+			"Ar_TagListByDay",
+			"Ar_TagListByYear",
 			"Ar_Category",
 			"Ar_CategoryGroup",
 		]);

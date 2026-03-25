@@ -39,14 +39,14 @@ public sealed class UsageRepository : IUsageRepository
 	public Task<IReadOnlyList<HourlyUsageDto>> GetHourlyAppUsageAsync(
 		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default) =>
 		_capabilities.HasHourlyUsage
-			? GetHourlyUsageAsync("Ar_ActivityByHour", startDay, endDay, limit, cancellationToken)
+			? GetHourlyUsageAsync(["ManicTime/Applications"], startDay, endDay, limit, cancellationToken)
 			: GetHourlyUsageFallbackAsync(["ManicTime/Applications"], startDay, endDay, limit, cancellationToken);
 
 	/// <inheritdoc />
 	public Task<IReadOnlyList<HourlyUsageDto>> GetHourlyWebUsageAsync(
 		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default) =>
 		_capabilities.HasHourlyUsage
-			? GetHourlyUsageAsync("Ar_ActivityByHour", startDay, endDay, limit, cancellationToken)
+			? GetHourlyUsageAsync(WebSchemaNames, startDay, endDay, limit, cancellationToken, WebGroupType)
 			: GetHourlyUsageFallbackAsync(WebSchemaNames, startDay, endDay, limit, cancellationToken, WebGroupType);
 
 	/// <inheritdoc />
@@ -86,10 +86,13 @@ public sealed class UsageRepository : IUsageRepository
 	// ── Primary paths (pre-aggregated tables) ──
 
 	private Task<IReadOnlyList<HourlyUsageDto>> GetHourlyUsageAsync(
-		string tableName, string startDay, string endDay, int? limit, CancellationToken cancellationToken)
+		string[] schemaNames, string startDay, string endDay, int? limit,
+		CancellationToken cancellationToken, string? groupType = null)
 	{
 		var effectiveLimit = QueryLimits.Clamp(limit, QueryLimits.DefaultUsageLimit, QueryLimits.MaxHourlyUsageRows);
-		var queryName = string.Concat("GetHourlyUsage(", tableName, ")");
+		var queryName = string.Concat("GetHourlyUsage(", string.Join('|', schemaNames), ")");
+		var (schemaFilter, schemaParams) = BuildSchemaFilter(schemaNames);
+		var groupCondition = groupType is not null ? "\n\t\t      AND g.GroupType = @groupType" : "";
 
 		return SqliteRetryHelper.ExecuteWithRetryAsync<IReadOnlyList<HourlyUsageDto>>(
 			_logger,
@@ -100,16 +103,28 @@ public sealed class UsageRepository : IUsageRepository
 				using var connection = _connectionFactory.CreateConnection();
 				using var command = connection.CreateCommand();
 				command.CommandText = $"""
-					SELECT h.Day, h.Hour, cg.Name, cg.Color, cg.Key, h.TotalSeconds
-					FROM {tableName} h
-					INNER JOIN Ar_CommonGroup cg ON h.CommonGroupId = cg.CommonGroupId
-					WHERE h.Day >= @startDay AND h.Day < @endDay
-					ORDER BY h.Day, h.Hour, h.TotalSeconds DESC
+					SELECT DATE(abh.Hour) AS Day,
+					       CAST(strftime('%H', abh.Hour) AS INTEGER) AS HourNum,
+					       COALESCE(g.Name, a.Name, '(unknown)') AS Name,
+					       g.Color, g.Key,
+					       SUM(
+					         (JULIANDAY(MIN(a.EndLocalTime, strftime('%Y-%m-%d %H:00:00', abh.Hour, '+1 hour')))
+					          - JULIANDAY(MAX(a.StartLocalTime, abh.Hour))) * 86400
+					       ) AS TotalSeconds
+					FROM Ar_ActivityByHour abh
+					INNER JOIN Ar_Activity a ON abh.ActivityId = a.ActivityId AND abh.ReportId = a.ReportId
+					LEFT JOIN Ar_Group g ON a.GroupId = g.GroupId AND a.ReportId = g.ReportId
+					WHERE abh.Hour >= @startDay AND abh.Hour < @endDay
+					  AND abh.ReportId IN (
+					      SELECT ReportId FROM Ar_Timeline
+					      WHERE {schemaFilter}
+					  ){groupCondition}
+					GROUP BY Day, HourNum, COALESCE(g.Name, a.Name, '(unknown)'), g.Color, g.Key
+					HAVING TotalSeconds > 0
+					ORDER BY Day, HourNum, TotalSeconds DESC
 					LIMIT @limit
 					""";
-				command.Parameters.AddWithValue("@startDay", startDay);
-				command.Parameters.AddWithValue("@endDay", endDay);
-				command.Parameters.AddWithValue("@limit", effectiveLimit);
+				AddSchemaAndRangeParams(command, schemaParams, startDay, endDay, effectiveLimit, groupType);
 
 				return await ReadHourlyResultsAsync(command, queryName, ct).ConfigureAwait(false);
 			},
@@ -131,11 +146,11 @@ public sealed class UsageRepository : IUsageRepository
 				using var connection = _connectionFactory.CreateConnection();
 				using var command = connection.CreateCommand();
 				command.CommandText = $"""
-					SELECT d.Day, cg.Name, cg.Color, cg.Key, d.TotalSeconds
+					SELECT d.Hour, cg.Name, cg.Color, cg.Key, d.TotalSeconds
 					FROM {tableName} d
-					INNER JOIN Ar_CommonGroup cg ON d.CommonGroupId = cg.CommonGroupId
-					WHERE d.Day >= @startDay AND d.Day < @endDay
-					ORDER BY d.Day, d.TotalSeconds DESC
+					INNER JOIN Ar_CommonGroup cg ON d.CommonId = cg.CommonId
+					WHERE d.Hour >= @startDay AND d.Hour < @endDay
+					ORDER BY d.Hour, d.TotalSeconds DESC
 					LIMIT @limit
 					""";
 				command.Parameters.AddWithValue("@startDay", startDay);
@@ -161,11 +176,11 @@ public sealed class UsageRepository : IUsageRepository
 				using var connection = _connectionFactory.CreateConnection();
 				using var command = connection.CreateCommand();
 				command.CommandText = """
-					SELECT cg.Name, CAST(strftime('%w', aby.Day) AS INTEGER) AS DayOfWeek,
+					SELECT cg.Name, CAST(strftime('%w', aby.Hour) AS INTEGER) AS DayOfWeek,
 					       SUM(aby.TotalSeconds) AS TotalSeconds
 					FROM Ar_ApplicationByYear aby
-					JOIN Ar_CommonGroup cg ON aby.CommonGroupId = cg.CommonGroupId
-					WHERE aby.Day >= @startDay AND aby.Day < @endDay
+					JOIN Ar_CommonGroup cg ON aby.CommonId = cg.CommonId
+					WHERE aby.Hour >= @startDay AND aby.Hour < @endDay
 					GROUP BY cg.Name, DayOfWeek
 					ORDER BY cg.Name, DayOfWeek
 					LIMIT @limit
