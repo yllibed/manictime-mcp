@@ -506,8 +506,7 @@ public sealed class NarrativeTools
 					Application = appName,
 					Document = SanitizeDocumentName(FindOverlappingDocument(docActivities, startDt, endDt)),
 					Website = website,
-					Tags = a.Tags is { Length: > 0 } ? a.Tags : null,
-					ScreenshotRef = FindClosestScreenshot(screenshots, startDt, endDt),
+		ScreenshotRef = FindClosestScreenshot(screenshots, startDt, endDt),
 				};
 			})
 			.ToList();
@@ -749,30 +748,8 @@ public sealed class NarrativeTools
 			Application = a.Application,
 			Document = a.Document ?? b.Document,
 			Website = a.Website ?? b.Website,
-			Tags = MergeTags(a.Tags, b.Tags),
-			ScreenshotRef = a.ScreenshotRef,
+		ScreenshotRef = a.ScreenshotRef,
 		};
-	}
-
-	private static string[]? MergeTags(string[]? a, string[]? b)
-	{
-		if (a is null or { Length: 0 })
-		{
-			return b is { Length: > 0 } ? b : null;
-		}
-
-		if (b is null or { Length: 0 })
-		{
-			return a;
-		}
-
-		var set = new HashSet<string>(a, StringComparer.Ordinal);
-		foreach (var tag in b)
-		{
-			set.Add(tag);
-		}
-
-		return [.. set.Order(StringComparer.Ordinal)];
 	}
 
 	/// <summary>

@@ -36,7 +36,6 @@ public sealed class NarrativeToolsTests
 			Name = "VS Code",
 			GroupId = null,
 			CommonGroupName = "Visual Studio Code",
-			Tags = ["coding", "work"],
 		},
 		new()
 		{

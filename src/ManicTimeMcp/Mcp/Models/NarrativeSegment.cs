@@ -21,9 +21,6 @@ internal sealed class NarrativeSegment
 	/// <summary>Active website during this segment (from Documents timeline, GroupType=WebSites).</summary>
 	public string? Website { get; init; }
 
-	/// <summary>Tags associated with this activity segment, or null if tag data unavailable.</summary>
-	public string[]? Tags { get; init; }
-
 	/// <summary>Closest screenshot reference for tool chaining, or null if no screenshot exists nearby.</summary>
 	public string? ScreenshotRef { get; init; }
 }

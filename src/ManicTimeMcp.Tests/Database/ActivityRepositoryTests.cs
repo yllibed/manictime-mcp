@@ -256,7 +256,6 @@ public sealed class ActivityRepositoryTests
 		var devenv = results.First(r => string.Equals(r.Name, "devenv.exe", StringComparison.Ordinal));
 		devenv.GroupName.Should().Be("Visual Studio");
 		devenv.CommonGroupName.Should().BeNull();
-		devenv.Tags.Should().BeNull();
 	}
 
 	[TestMethod]
