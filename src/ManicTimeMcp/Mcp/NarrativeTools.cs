@@ -506,7 +506,7 @@ public sealed class NarrativeTools
 					Application = appName,
 					Document = SanitizeDocumentName(FindOverlappingDocument(docActivities, startDt, endDt)),
 					Website = website,
-		ScreenshotRef = FindClosestScreenshot(screenshots, startDt, endDt),
+					ScreenshotRef = FindClosestScreenshot(screenshots, startDt, endDt),
 				};
 			})
 			.ToList();
@@ -748,7 +748,7 @@ public sealed class NarrativeTools
 			Application = a.Application,
 			Document = a.Document ?? b.Document,
 			Website = a.Website ?? b.Website,
-		ScreenshotRef = a.ScreenshotRef,
+			ScreenshotRef = a.ScreenshotRef,
 		};
 	}
 
