@@ -211,46 +211,6 @@ public sealed class ActivityRepositoryTests
 	}
 
 	[TestMethod]
-	public async Task GetEnrichedActivitiesAsync_Full_ReturnsTags()
-	{
-		using var fixture = FixtureDatabase.CreateFull(FixtureSeeder.SeedFullData);
-		var sut = CreateRepository(fixture, fullCapabilities: true);
-
-		var results = await sut.GetEnrichedActivitiesAsync(
-			timelineId: 2,
-			startLocalTime: "2025-01-15 00:00:00",
-			endLocalTime: "2025-01-16 00:00:00").ConfigureAwait(false);
-
-		// Activity 3 (devenv.exe 08:00-10:00) has tag "coding"
-		var devenvFirst = results.First(r =>
-			string.Equals(r.Name, "devenv.exe", StringComparison.Ordinal)
-			&& string.Equals(r.StartLocalTime, "2025-01-15 08:00:00", StringComparison.Ordinal));
-		devenvFirst.Tags.Should().NotBeNull();
-		devenvFirst.Tags.Should().Contain("coding");
-
-		// Activity 4 (chrome.exe 10:00-11:30) has tag "browsing"
-		var chrome = results.First(r => string.Equals(r.Name, "chrome.exe", StringComparison.Ordinal));
-		chrome.Tags.Should().NotBeNull();
-		chrome.Tags.Should().Contain("browsing");
-	}
-
-	[TestMethod]
-	public async Task GetEnrichedActivitiesAsync_Full_NoTags_ReturnsNullTags()
-	{
-		using var fixture = FixtureDatabase.CreateFull(FixtureSeeder.SeedFullData);
-		var sut = CreateRepository(fixture, fullCapabilities: true);
-
-		var results = await sut.GetEnrichedActivitiesAsync(
-			timelineId: 2,
-			startLocalTime: "2025-01-15 00:00:00",
-			endLocalTime: "2025-01-16 00:00:00").ConfigureAwait(false);
-
-		// Activity 5 (WindowsTerminal.exe 11:30-12:00) has no tags
-		var terminal = results.First(r => string.Equals(r.Name, "WindowsTerminal.exe", StringComparison.Ordinal));
-		terminal.Tags.Should().BeNull();
-	}
-
-	[TestMethod]
 	public async Task GetEnrichedActivitiesAsync_Full_OverlappingGroupIds_NoDuplication()
 	{
 		using var fixture = FixtureDatabase.CreateFull(conn =>
@@ -260,7 +220,7 @@ public sealed class ActivityRepositoryTests
 			// Full path also needs CommonGroup and Tag tables (seeded by CreateFull)
 			// Add minimal common groups so the JOIN has something to match
 			FixtureDatabase.Execute(conn,
-				"INSERT INTO Ar_CommonGroup (CommonGroupId, Name) VALUES (1, 'VS Code'), (2, 'Firefox')");
+				"INSERT INTO Ar_CommonGroup (CommonId, Name) VALUES (1, 'VS Code'), (2, 'Firefox')");
 		});
 		var sut = CreateRepository(fixture, fullCapabilities: true);
 

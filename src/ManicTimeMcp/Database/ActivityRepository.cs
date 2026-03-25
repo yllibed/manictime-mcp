@@ -141,7 +141,7 @@ public sealed class ActivityRepository : IActivityRepository
 	{
 		var effectiveLimit = QueryLimits.Clamp(limit, QueryLimits.DefaultActivities, QueryLimits.MaxActivities);
 
-		return _capabilities.HasCommonGroup && _capabilities.HasTags
+		return _capabilities.HasCommonGroup
 			? GetEnrichedActivitiesFullAsync(timelineId, startLocalTime, endLocalTime, effectiveLimit, cancellationToken)
 			: GetEnrichedActivitiesDegradedAsync(timelineId, startLocalTime, endLocalTime, effectiveLimit, cancellationToken);
 	}
@@ -200,13 +200,10 @@ public sealed class ActivityRepository : IActivityRepository
 					SELECT
 						a.ActivityId, a.ReportId, a.StartLocalTime, a.EndLocalTime, a.Name, a.GroupId,
 						g.Name, g.Color, g.Key,
-						cg.Name,
-						(SELECT JSON_GROUP_ARRAY(t.Name) FROM Ar_ActivityTag at
-						 INNER JOIN Ar_Tag t ON at.TagId = t.TagId
-						 WHERE at.ActivityId = a.ActivityId) AS Tags
+						cg.Name
 					FROM Ar_Activity a
 					LEFT JOIN Ar_Group g ON a.GroupId = g.GroupId AND a.ReportId = g.ReportId
-					LEFT JOIN Ar_CommonGroup cg ON a.CommonGroupId = cg.CommonGroupId
+					LEFT JOIN Ar_CommonGroup cg ON a.CommonGroupId = cg.CommonId
 					WHERE a.ReportId = @timelineId
 					  AND a.StartLocalTime < @endLocalTime
 					  AND a.EndLocalTime > @startLocalTime
@@ -234,7 +231,6 @@ public sealed class ActivityRepository : IActivityRepository
 						GroupColor = await reader.IsDBNullAsync(7, ct).ConfigureAwait(false) ? null : reader.GetString(7),
 						GroupKey = await reader.IsDBNullAsync(8, ct).ConfigureAwait(false) ? null : reader.GetString(8),
 						CommonGroupName = await reader.IsDBNullAsync(9, ct).ConfigureAwait(false) ? null : reader.GetString(9),
-						Tags = ParseTagsJson(await reader.IsDBNullAsync(10, ct).ConfigureAwait(false) ? null : reader.GetString(10)),
 					});
 				}
 
@@ -294,29 +290,5 @@ public sealed class ActivityRepository : IActivityRepository
 				return (IReadOnlyList<EnrichedActivityDto>)results.AsReadOnly();
 			},
 			cancellationToken);
-	}
-
-	private static string[]? ParseTagsJson(string? json)
-	{
-		if (json is null || string.Equals(json, "[]", StringComparison.Ordinal))
-		{
-			return null;
-		}
-
-		// JSON_GROUP_ARRAY returns ["tag1","tag2"] — parse with trim-safe JsonDocument
-		using var doc = System.Text.Json.JsonDocument.Parse(json);
-		var array = doc.RootElement;
-		if (array.ValueKind != System.Text.Json.JsonValueKind.Array || array.GetArrayLength() == 0)
-		{
-			return null;
-		}
-
-		var tags = new string[array.GetArrayLength()];
-		for (var i = 0; i < tags.Length; i++)
-		{
-			tags[i] = array[i].GetString()!;
-		}
-
-		return tags;
 	}
 }

@@ -70,7 +70,7 @@ public sealed class QueryCapabilityMatrix
 	public bool HasCommonGroup => Has("Ar_CommonGroup");
 
 	/// <summary>Whether tag data is available.</summary>
-	public bool HasTags => Has("Ar_Tag") && Has("Ar_ActivityTag");
+	public bool HasTags => Has("Ar_TagListByDay");
 
 	/// <summary>Whether timeline summary data is available.</summary>
 	public bool HasTimelineSummary => Has("Ar_TimelineSummary");

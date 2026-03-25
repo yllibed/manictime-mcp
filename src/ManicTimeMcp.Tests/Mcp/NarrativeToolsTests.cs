@@ -281,8 +281,8 @@ public sealed class NarrativeToolsTests
 			"Ar_TimelineSummary",
 			"Ar_Environment",
 			"Ar_Folder",
-			"Ar_Tag",
-			"Ar_ActivityTag",
+			"Ar_TagListByDay",
+			"Ar_TagListByYear",
 			"Ar_Category",
 			"Ar_CategoryGroup",
 		]);

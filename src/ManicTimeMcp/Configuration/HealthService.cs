@@ -19,7 +19,7 @@ public sealed class HealthService : IHealthService
 	internal const string ScreenshotRemediationHint = "Review ManicTime screenshot capture and retention settings.";
 
 	/// <summary>ManicTime desktop version that this MCP server was validated against.</summary>
-	internal const string TestedManicTimeVersion = "2025.3.5.0";
+	internal const string TestedManicTimeVersion = "2025.3.9.1";
 
 	private readonly IDataDirectoryResolver _resolver;
 	private readonly IPlatformEnvironment _platform;

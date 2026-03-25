@@ -14,7 +14,7 @@ public sealed class HealthServiceTests
 	private const string TestScreenshotDir = @"C:\TestManicTime\Screenshots";
 	private const string TestInstallDir = @"C:\Program Files\ManicTime\";
 	private const string TestExePath = @"C:\Program Files\ManicTime\ManicTime.exe";
-	private const string TestVersion = "2025.3.5.0";
+	private const string TestVersion = "2025.3.9.1";
 	private const int TestProcessId = 12345;
 
 	#region DeriveStatus
@@ -259,7 +259,7 @@ public sealed class HealthServiceTests
 	[TestMethod]
 	public void GetHealthReport_DifferentVersion_EmitsUntestedWarning()
 	{
-		const string differentVersion = "2025.3.8.0";
+		const string differentVersion = "2025.3.5.0";
 		var resolver = new StubResolver(TestDataDir, DataDirectorySource.EnvironmentVariable);
 		var platform = new FakePlatformEnvironment
 		{
@@ -455,7 +455,7 @@ public sealed class HealthServiceTests
 				Issues = [],
 				Capabilities = new QueryCapabilityMatrix([
 					"Ar_CommonGroup", "Ar_ApplicationByDay", "Ar_WebSiteByDay",
-					"Ar_Tag", "Ar_ActivityTag",
+					"Ar_TagListByDay", "Ar_TagListByYear",
 				]),
 			},
 		};
