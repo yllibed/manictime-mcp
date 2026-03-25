@@ -61,7 +61,7 @@ public sealed class QueryCapabilityMatrix
 	public bool HasPreAggregatedDocUsage => Has("Ar_DocumentByDay") && Has("Ar_CommonGroup");
 
 	/// <summary>Whether hourly activity data is available.</summary>
-	public bool HasHourlyUsage => Has("Ar_ActivityByHour") && Has("Ar_CommonGroup");
+	public bool HasHourlyUsage => Has("Ar_ActivityByHour");
 
 	/// <summary>Whether yearly aggregation tables are available.</summary>
 	public bool HasYearlyUsage => Has("Ar_ApplicationByYear") && Has("Ar_CommonGroup");
