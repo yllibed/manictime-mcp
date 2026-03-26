@@ -12,5 +12,6 @@ internal static class JsonOptions
 		PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
 		WriteIndented = false,
 		DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+		Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
 	};
 }

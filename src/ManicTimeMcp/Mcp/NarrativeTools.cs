@@ -218,18 +218,33 @@ public sealed class NarrativeTools
 		BuildSegmentDataAsync(string startDate, string endDate, bool includeSegments,
 			double minDurationMinutes, double maxGapMinutes, int? maxSegments, CancellationToken ct)
 	{
+		var startLocal = FormatLocalTime(ParseDates(startDate, endDate).Start);
+		var endLocal = endDate + " 00:00:00";
+
 		if (!includeSegments)
 		{
+			// Even without segments, get authoritative active time from ComputerUsage
+			var timelines = await _timelineRepository.GetTimelinesAsync(ct).ConfigureAwait(false);
+			var usageTimeline = timelines.FirstOrDefault(
+				t => t.SchemaName.Equals("ManicTime/ComputerUsage", StringComparison.OrdinalIgnoreCase) ||
+					 t.BaseSchemaName.Equals("ManicTime/ComputerUsage", StringComparison.OrdinalIgnoreCase));
+
+			if (usageTimeline is not null)
+			{
+				var usageActivities = await _activityRepository.GetActivitiesAsync(
+					usageTimeline.ReportId, startLocal, endLocal,
+					limit: QueryLimits.MaxActivities, cancellationToken: ct).ConfigureAwait(false);
+				return ([], ComputeTotalActiveMinutes(usageActivities), 0, false);
+			}
+
+			// Fallback: use app usage sum when no ComputerUsage timeline
 			var appUsage = await _usageRepository.GetDailyAppUsageAsync(
 				startDate, endDate, cancellationToken: ct).ConfigureAwait(false);
 			var total = Math.Round(appUsage.Sum(a => a.TotalSeconds) / 60.0, digits: 1);
 			return ([], total, 0, false);
 		}
 
-		var startLocal = FormatLocalTime(ParseDates(startDate, endDate).Start);
-		var endLocal = endDate + " 00:00:00";
-
-		var rawSegments = await BuildSegmentsAsync(startLocal, endLocal, ct).ConfigureAwait(false);
+		var (rawSegments, totalActiveMinutes) = await BuildSegmentsAsync(startLocal, endLocal, ct).ConfigureAwait(false);
 		var segments = MergeConsecutiveSegments(rawSegments, maxGapMinutes);
 
 		if (minDurationMinutes > 0)
@@ -237,7 +252,6 @@ public sealed class NarrativeTools
 			segments = segments.Where(s => s.DurationMinutes >= minDurationMinutes).ToList();
 		}
 
-		var totalMinutes = segments.Sum(s => s.DurationMinutes);
 		var totalSegments = segments.Count;
 		var effectiveMaxSegments = Math.Min(maxSegments ?? DefaultMaxSegments, MaxSegmentsLimit);
 		var isTruncated = segments.Count > effectiveMaxSegments;
@@ -246,7 +260,7 @@ public sealed class NarrativeTools
 			segments = segments.Take(effectiveMaxSegments).ToList();
 		}
 
-		return (segments, totalMinutes, totalSegments, isTruncated);
+		return (segments, totalActiveMinutes, totalSegments, isTruncated);
 	}
 
 	private async Task<PeriodSummaryResponse> BuildPeriodSummaryAsync(
@@ -317,7 +331,7 @@ public sealed class NarrativeTools
 		};
 	}
 
-	private async Task<List<NarrativeSegment>> BuildSegmentsAsync(
+	private async Task<(List<NarrativeSegment> Segments, double TotalActiveMinutes)> BuildSegmentsAsync(
 		string startLocal, string endLocal, CancellationToken ct)
 	{
 		var timelines = await _timelineRepository.GetTimelinesAsync(ct).ConfigureAwait(false);
@@ -327,7 +341,7 @@ public sealed class NarrativeTools
 
 		if (appTimeline is null)
 		{
-			return [];
+			return ([], 0);
 		}
 
 		var activitiesTask = _activityRepository.GetEnrichedActivitiesAsync(
@@ -368,12 +382,38 @@ public sealed class NarrativeTools
 		var docActivities = await docActivitiesTask.ConfigureAwait(false);
 		var webActivities = await webActivitiesTask.ConfigureAwait(false);
 
+		// Compute total active time from ComputerUsage (authoritative source)
+		var totalActiveMinutes = ComputeTotalActiveMinutes(usageActivities);
+
 		// Clip application activities to Active intervals (excludes Away/Locked/Off time)
 		var clippedActivities = ClipToActiveIntervals(activities, usageActivities);
 
 		var screenshots = await LoadScreenshotsAsync(startLocal, endLocal, ct).ConfigureAwait(false);
 
-		return MapToSegments(clippedActivities, docActivities, webActivities, screenshots);
+		return (MapToSegments(clippedActivities, docActivities, webActivities, screenshots), totalActiveMinutes);
+	}
+
+	/// <summary>
+	/// Computes the total active time from ComputerUsage intervals.
+	/// This is the authoritative source for "how long was the computer active",
+	/// independent of segment filtering or merging.
+	/// </summary>
+	internal static double ComputeTotalActiveMinutes(IReadOnlyList<Database.Dto.ActivityDto> usageActivities)
+	{
+		var totalMinutes = 0.0;
+		foreach (var usage in usageActivities)
+		{
+			if (!string.Equals(usage.Name, "Active", StringComparison.OrdinalIgnoreCase))
+			{
+				continue;
+			}
+
+			var start = DateTime.ParseExact(usage.StartLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+			var end = DateTime.ParseExact(usage.EndLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+			totalMinutes += (end - start).TotalMinutes;
+		}
+
+		return Math.Round(totalMinutes, digits: 1);
 	}
 
 	/// <summary>
@@ -479,23 +519,37 @@ public sealed class NarrativeTools
 		IReadOnlyList<ScreenshotInfo>? screenshots)
 	{
 		string? lastKnownWebsite = null;
+		string? lastBrowserApp = null;
 		return activities
 			.Select(a =>
 			{
 				var startDt = DateTime.ParseExact(a.StartLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 				var endDt = DateTime.ParseExact(a.EndLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 				var appName = a.CommonGroupName ?? a.GroupName ?? a.Name;
-				var website = FindOverlappingWebsite(webActivities, startDt, endDt);
-
-				// Carry forward last known website for browser segments with no direct match
 				var isBrowser = appName is not null && BrowserAppNames.Contains(appName);
-				if (website is not null)
+
+				// Only resolve website for browser apps — non-browser apps never get a website
+				string? website = null;
+				if (isBrowser)
 				{
-					lastKnownWebsite = website;
-				}
-				else if (isBrowser && lastKnownWebsite is not null)
-				{
-					website = lastKnownWebsite;
+					website = SanitizeWebsite(FindOverlappingWebsite(webActivities, startDt, endDt));
+
+					// Reset carry-forward when switching to a different browser app
+					if (!string.Equals(appName, lastBrowserApp, StringComparison.Ordinal))
+					{
+						lastKnownWebsite = null;
+					}
+
+					if (website is not null)
+					{
+						lastKnownWebsite = website;
+					}
+					else if (lastKnownWebsite is not null)
+					{
+						website = lastKnownWebsite;
+					}
+
+					lastBrowserApp = appName;
 				}
 
 				return new NarrativeSegment
@@ -747,7 +801,7 @@ public sealed class NarrativeTools
 			DurationMinutes = Math.Round((endDt - startDt).TotalMinutes, digits: 1),
 			Application = a.Application,
 			Document = a.Document ?? b.Document,
-			Website = a.Website ?? b.Website,
+			Website = a.Website, // Don't inherit b's website — prevents leakage when absorbing short interruptions
 			ScreenshotRef = a.ScreenshotRef,
 		};
 	}
@@ -757,6 +811,32 @@ public sealed class NarrativeTools
 	/// </summary>
 	internal static bool IsValidWebsiteName(string name) =>
 		name.Length > 1;
+
+	/// <summary>Maximum length for website and document values in segment output.</summary>
+	private const int MaxFieldLength = 200;
+
+	/// <summary>
+	/// Sanitizes website names by stripping query strings from URLs to reduce payload bloat
+	/// (e.g. OAuth URLs with 500+ char query parameters).
+	/// </summary>
+	internal static string? SanitizeWebsite(string? name)
+	{
+		if (name is null or { Length: 0 })
+		{
+			return null;
+		}
+
+		// Strip query string from URLs (keep scheme + host + path)
+		var queryIndex = name.IndexOf('?');
+		if (queryIndex > 0)
+		{
+			name = name[..queryIndex];
+		}
+
+		return name.Length > MaxFieldLength
+			? string.Concat(name.AsSpan(0, MaxFieldLength), "...")
+			: name;
+	}
 
 	/// <summary>
 	/// Sanitizes document names. Windows file paths (e.g. "C:\foo\bar.cs") are normalized to
@@ -775,10 +855,12 @@ public sealed class NarrativeTools
 			&& name[1] == ':'
 			&& (name[2] == '\\' || name[2] == '/'))
 		{
-			return string.Concat("file:///", name.Replace('\\', '/'));
+			name = string.Concat("file:///", name.Replace('\\', '/'));
 		}
 
-		return name;
+		return name.Length > MaxFieldLength
+			? string.Concat(name.AsSpan(0, MaxFieldLength), "...")
+			: name;
 	}
 
 	private async Task<List<AppUsageEntry>> GetTopAppsAsync(string startDate, string endDate, CancellationToken ct)

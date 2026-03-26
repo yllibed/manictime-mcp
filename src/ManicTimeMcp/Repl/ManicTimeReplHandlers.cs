@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json;
 using ManicTimeMcp.Mcp;
 using ManicTimeMcp.Screenshots;
 using Repl;
@@ -9,6 +10,7 @@ using Repl.Mcp;
 namespace ManicTimeMcp.Repl;
 
 /// <summary>Implements the Repl command handlers for the ManicTime surface.</summary>
+#pragma warning disable IL2026 // Trimming is disabled (PublishTrimmed=false); reflection-based JSON is safe
 internal static class ManicTimeReplHandlers
 {
 	public static async Task<object> ListTimelinesAsync(
@@ -249,6 +251,15 @@ internal static class ManicTimeReplHandlers
 		};
 	}
 
+	public static string GetScreenshotResource(
+		[Description("Screenshot reference from screenshot list.")] string screenshotRef,
+		[FromServices] IScreenshotRegistry registry,
+		[FromServices] IScreenshotService screenshotService)
+	{
+		var result = GetScreenshot(screenshotRef, registry, screenshotService);
+		return JsonSerializer.Serialize(result, JsonOptions.Default);
+	}
+
 	public static object CropScreenshot(
 		[Description("Screenshot reference returned by screenshot list.")] string screenshotRef,
 		[Description("Left crop edge.")] double x,
@@ -388,23 +399,23 @@ internal static class ManicTimeReplHandlers
 		};
 	}
 
-	public static object? GetConfigResource([FromServices] ManicTimeResources resources) => resources.GetConfig();
+	public static string GetConfigResource([FromServices] ManicTimeResources resources) => resources.GetConfig();
 
-	public static Task<System.Text.Json.Nodes.JsonNode?> GetTimelinesResourceAsync(
+	public static Task<string> GetTimelinesResourceAsync(
 		[FromServices] ManicTimeResources resources,
 		CancellationToken cancellationToken) =>
 		resources.GetTimelinesAsync(cancellationToken);
 
-	public static object? GetHealthResource([FromServices] ManicTimeResources resources) => resources.GetHealth();
+	public static string GetHealthResource([FromServices] ManicTimeResources resources) => resources.GetHealth();
 
 	public static string GetGuideResource() => GuideContent.Text;
 
-	public static Task<System.Text.Json.Nodes.JsonNode?> GetEnvironmentResourceAsync(
+	public static Task<string> GetEnvironmentResourceAsync(
 		[FromServices] ManicTimeResources resources,
 		CancellationToken cancellationToken) =>
 		resources.GetEnvironmentAsync(cancellationToken);
 
-	public static Task<System.Text.Json.Nodes.JsonNode?> GetDataRangeResourceAsync(
+	public static Task<string> GetDataRangeResourceAsync(
 		[FromServices] ManicTimeResources resources,
 		CancellationToken cancellationToken) =>
 		resources.GetDataRangeAsync(cancellationToken);
@@ -597,3 +608,4 @@ internal static class ManicTimeReplHandlers
 		return thumbnailPath is not null && File.Exists(thumbnailPath);
 	}
 }
+#pragma warning restore IL2026

@@ -29,6 +29,11 @@ internal sealed class ScreenshotModule : IReplModule
 			.WithDescription("Fetch a screenshot payload by reference.")
 			.WithDetails("Returns metadata plus thumbnail/full image payloads encoded as base64 text.")
 			.ReadOnly();
+
+		screenshot.Map("{screenshotRef}", ManicTimeReplHandlers.GetScreenshotResource)
+			.WithDescription("Read a screenshot by reference.")
+			.ReadOnly()
+			.AsResource();
 	}
 
 	private static void MapCrop(IReplMap screenshot)
