@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using AwesomeAssertions;
 using ManicTimeMcp.Database.Dto;
 using ManicTimeMcp.Mcp;
@@ -35,7 +36,7 @@ public sealed class ResourceOperationsTests
 	{
 		var resources = CreateResources();
 
-		var result = resources.GetConfig();
+		var result = JsonNode.Parse(resources.GetConfig());
 
 		result.Should().NotBeNull();
 		result!["dataDirectory"]!.GetValue<string>().Should().Be(@"C:\TestData");
@@ -46,7 +47,7 @@ public sealed class ResourceOperationsTests
 	{
 		var resources = CreateResources();
 
-		var result = await resources.GetTimelinesAsync(CancellationToken.None).ConfigureAwait(false);
+		var result = JsonNode.Parse(await resources.GetTimelinesAsync(CancellationToken.None).ConfigureAwait(false));
 
 		result.Should().NotBeNull();
 		result!.AsArray()[0]!["schemaName"]!.GetValue<string>().Should().Be("ManicTime/Applications");
@@ -57,7 +58,7 @@ public sealed class ResourceOperationsTests
 	{
 		var resources = CreateResources();
 
-		var result = await resources.GetEnvironmentAsync(CancellationToken.None).ConfigureAwait(false);
+		var result = JsonNode.Parse(await resources.GetEnvironmentAsync(CancellationToken.None).ConfigureAwait(false));
 
 		result.Should().NotBeNull();
 		result!["environments"]!.AsArray()[0]!["deviceName"]!.GetValue<string>().Should().Be("TEST-PC");
@@ -68,7 +69,7 @@ public sealed class ResourceOperationsTests
 	{
 		var resources = CreateResources();
 
-		var result = await resources.GetDataRangeAsync(CancellationToken.None).ConfigureAwait(false);
+		var result = JsonNode.Parse(await resources.GetDataRangeAsync(CancellationToken.None).ConfigureAwait(false));
 
 		result.Should().NotBeNull();
 		result!["timelineSummaries"]!.AsArray().Count.Should().Be(1);
@@ -86,6 +87,5 @@ public sealed class ResourceOperationsTests
 		guide.Should().Contain("manictime://resource/data-range");
 		guide.Should().NotContain("get_timelines");
 		guide.Should().NotContain("manictime://health");
-		guide.Should().NotContain("manictime://screenshot/");
 	}
 }

@@ -59,7 +59,7 @@
   - `manictime://resource/guide`
   - `manictime://resource/environment`
   - `manictime://resource/data-range`
-- Do not expose `manictime://screenshot/{screenshotRef}` as an active contract resource in v1.
+- Expose `manictime://screenshot/{screenshotRef}` as a resource template for agents that support reading MCP resources.
 - Expose these prompts:
   - `prompt daily-review`
   - `prompt weekly-review`
