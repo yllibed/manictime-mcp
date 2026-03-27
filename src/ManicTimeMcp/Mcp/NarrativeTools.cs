@@ -225,9 +225,7 @@ public sealed class NarrativeTools
 		{
 			// Even without segments, get authoritative active time from ComputerUsage
 			var timelines = await _timelineRepository.GetTimelinesAsync(ct).ConfigureAwait(false);
-			var usageTimeline = timelines.FirstOrDefault(
-				t => t.SchemaName.Equals("ManicTime/ComputerUsage", StringComparison.OrdinalIgnoreCase) ||
-					 t.BaseSchemaName.Equals("ManicTime/ComputerUsage", StringComparison.OrdinalIgnoreCase));
+			var usageTimeline = FindTimeline(timelines, "ManicTime/ComputerUsage");
 
 			if (usageTimeline is not null)
 			{

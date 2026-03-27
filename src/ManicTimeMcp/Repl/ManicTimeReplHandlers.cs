@@ -265,7 +265,7 @@ internal static class ManicTimeReplHandlers
 			return result;
 		}
 
-		return JsonSerializer.Serialize(result, JsonOptions.Default);
+		return JsonSerializer.Serialize(result, JsonOptions.Indented);
 	}
 
 	public static object CropScreenshot(
