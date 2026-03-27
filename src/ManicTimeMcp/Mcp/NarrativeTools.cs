@@ -335,10 +335,7 @@ public sealed class NarrativeTools
 		string startLocal, string endLocal, CancellationToken ct)
 	{
 		var timelines = await _timelineRepository.GetTimelinesAsync(ct).ConfigureAwait(false);
-		var appTimeline = timelines.FirstOrDefault(
-			t => t.SchemaName.Equals("ManicTime/Applications", StringComparison.OrdinalIgnoreCase) ||
-				 t.BaseSchemaName.Equals("ManicTime/Applications", StringComparison.OrdinalIgnoreCase));
-
+		var appTimeline = FindTimeline(timelines, "ManicTime/Applications");
 		if (appTimeline is null)
 		{
 			return ([], 0);
@@ -348,22 +345,14 @@ public sealed class NarrativeTools
 			appTimeline.ReportId, startLocal, endLocal,
 			limit: QueryLimits.MaxActivities, cancellationToken: ct);
 
-		// Find ComputerUsage timeline for Active/Away clipping
-		var usageTimeline = timelines.FirstOrDefault(
-			t => t.SchemaName.Equals("ManicTime/ComputerUsage", StringComparison.OrdinalIgnoreCase) ||
-				 t.BaseSchemaName.Equals("ManicTime/ComputerUsage", StringComparison.OrdinalIgnoreCase));
-
+		var usageTimeline = FindTimeline(timelines, "ManicTime/ComputerUsage");
 		var usageActivitiesTask = usageTimeline is not null
 			? _activityRepository.GetActivitiesAsync(
 				usageTimeline.ReportId, startLocal, endLocal,
 				limit: QueryLimits.MaxActivities, cancellationToken: ct)
 			: Task.FromResult<IReadOnlyList<Database.Dto.ActivityDto>>([]);
 
-		// Find Documents timeline for cross-timeline correlation
-		var docTimeline = timelines.FirstOrDefault(
-			t => t.SchemaName.Equals("ManicTime/Documents", StringComparison.OrdinalIgnoreCase) ||
-				 t.BaseSchemaName.Equals("ManicTime/Documents", StringComparison.OrdinalIgnoreCase));
-
+		var docTimeline = FindTimeline(timelines, "ManicTime/Documents");
 		var docActivitiesTask = docTimeline is not null
 			? _activityRepository.GetActivitiesAsync(
 				docTimeline.ReportId, startLocal, endLocal,
@@ -382,38 +371,55 @@ public sealed class NarrativeTools
 		var docActivities = await docActivitiesTask.ConfigureAwait(false);
 		var webActivities = await webActivitiesTask.ConfigureAwait(false);
 
-		// Compute total active time from ComputerUsage (authoritative source)
-		var totalActiveMinutes = ComputeTotalActiveMinutes(usageActivities);
-
-		// Clip application activities to Active intervals (excludes Away/Locked/Off time)
 		var clippedActivities = ClipToActiveIntervals(activities, usageActivities);
-
+		var totalActiveMinutes = ComputeTotalActiveMinutes(usageActivities, clippedActivities);
 		var screenshots = await LoadScreenshotsAsync(startLocal, endLocal, ct).ConfigureAwait(false);
 
 		return (MapToSegments(clippedActivities, docActivities, webActivities, screenshots), totalActiveMinutes);
 	}
 
+	private static Database.Dto.TimelineDto? FindTimeline(
+		IReadOnlyList<Database.Dto.TimelineDto> timelines, string schemaName) =>
+		timelines.FirstOrDefault(t =>
+			t.SchemaName.Equals(schemaName, StringComparison.OrdinalIgnoreCase) ||
+			t.BaseSchemaName.Equals(schemaName, StringComparison.OrdinalIgnoreCase));
+
 	/// <summary>
-	/// Computes the total active time from ComputerUsage intervals.
-	/// This is the authoritative source for "how long was the computer active",
-	/// independent of segment filtering or merging.
+	/// Computes the total active time from ComputerUsage intervals (authoritative source).
+	/// Falls back to clipped activity durations when no ComputerUsage data exists.
 	/// </summary>
-	internal static double ComputeTotalActiveMinutes(IReadOnlyList<Database.Dto.ActivityDto> usageActivities)
+	internal static double ComputeTotalActiveMinutes(
+		IReadOnlyList<Database.Dto.ActivityDto> usageActivities,
+		IReadOnlyList<Database.Dto.EnrichedActivityDto>? clippedActivities = null)
 	{
-		var totalMinutes = 0.0;
-		foreach (var usage in usageActivities)
+		if (usageActivities.Count > 0)
 		{
-			if (!string.Equals(usage.Name, "Active", StringComparison.OrdinalIgnoreCase))
+			var totalMinutes = 0.0;
+			foreach (var usage in usageActivities)
 			{
-				continue;
+				if (!string.Equals(usage.Name, "Active", StringComparison.OrdinalIgnoreCase))
+				{
+					continue;
+				}
+
+				var start = DateTime.ParseExact(usage.StartLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+				var end = DateTime.ParseExact(usage.EndLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+				totalMinutes += (end - start).TotalMinutes;
 			}
 
-			var start = DateTime.ParseExact(usage.StartLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-			var end = DateTime.ParseExact(usage.EndLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-			totalMinutes += (end - start).TotalMinutes;
+			return Math.Round(totalMinutes, digits: 1);
 		}
 
-		return Math.Round(totalMinutes, digits: 1);
+		// Fallback: no ComputerUsage timeline, compute from clipped activities
+		if (clippedActivities is { Count: > 0 })
+		{
+			return Math.Round(clippedActivities.Sum(a =>
+				(DateTime.ParseExact(a.EndLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
+				 - DateTime.ParseExact(a.StartLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)).TotalMinutes),
+				digits: 1);
+		}
+
+		return 0;
 	}
 
 	/// <summary>
@@ -535,7 +541,7 @@ public sealed class NarrativeTools
 					website = SanitizeWebsite(FindOverlappingWebsite(webActivities, startDt, endDt));
 
 					// Reset carry-forward when switching to a different browser app
-					if (!string.Equals(appName, lastBrowserApp, StringComparison.Ordinal))
+					if (!string.Equals(appName, lastBrowserApp, StringComparison.OrdinalIgnoreCase))
 					{
 						lastKnownWebsite = null;
 					}
@@ -834,7 +840,7 @@ public sealed class NarrativeTools
 		}
 
 		return name.Length > MaxFieldLength
-			? string.Concat(name.AsSpan(0, MaxFieldLength), "...")
+			? string.Concat(name.AsSpan(0, MaxFieldLength - 3), "...")
 			: name;
 	}
 
@@ -859,7 +865,7 @@ public sealed class NarrativeTools
 		}
 
 		return name.Length > MaxFieldLength
-			? string.Concat(name.AsSpan(0, MaxFieldLength), "...")
+			? string.Concat(name.AsSpan(0, MaxFieldLength - 3), "...")
 			: name;
 	}
 

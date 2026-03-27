@@ -9,14 +9,6 @@ namespace ManicTimeMcp.Mcp;
 #pragma warning disable IL2026 // Trimming is disabled (PublishTrimmed=false); reflection-based JSON is safe
 public sealed class ManicTimeResources
 {
-	private static readonly JsonSerializerOptions IndentedOptions = new()
-	{
-		PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-		WriteIndented = true,
-		DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-		Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-	};
-
 	private readonly IDataDirectoryResolver _resolver;
 	private readonly IHealthService _healthService;
 	private readonly ITimelineRepository _timelineRepository;
@@ -47,7 +39,7 @@ public sealed class ManicTimeResources
 		{
 			dataDirectory = result.Path,
 			directorySource = result.Source.ToString(),
-		}, IndentedOptions);
+		}, JsonOptions.Indented);
 	}
 
 	/// <summary>Returns available ManicTime timelines.</summary>
@@ -55,7 +47,7 @@ public sealed class ManicTimeResources
 	public async Task<string> GetTimelinesAsync(CancellationToken cancellationToken)
 	{
 		var timelines = await _timelineRepository.GetTimelinesAsync(cancellationToken).ConfigureAwait(false);
-		return JsonSerializer.Serialize(timelines, IndentedOptions);
+		return JsonSerializer.Serialize(timelines, JsonOptions.Indented);
 	}
 
 	/// <summary>Returns the current health diagnostic report.</summary>
@@ -63,7 +55,7 @@ public sealed class ManicTimeResources
 	public string GetHealth()
 	{
 		var report = _healthService.GetHealthReport();
-		return JsonSerializer.Serialize(report, IndentedOptions);
+		return JsonSerializer.Serialize(report, JsonOptions.Indented);
 	}
 
 	/// <summary>Returns the model usage guide.</summary>
@@ -75,7 +67,7 @@ public sealed class ManicTimeResources
 	public async Task<string> GetEnvironmentAsync(CancellationToken cancellationToken)
 	{
 		var environments = await _environmentRepository.GetEnvironmentsAsync(cancellationToken).ConfigureAwait(false);
-		return JsonSerializer.Serialize(new { environments }, IndentedOptions);
+		return JsonSerializer.Serialize(new { environments }, JsonOptions.Indented);
 	}
 
 	/// <summary>Returns available data date ranges from timeline summaries.</summary>
@@ -83,7 +75,7 @@ public sealed class ManicTimeResources
 	public async Task<string> GetDataRangeAsync(CancellationToken cancellationToken)
 	{
 		var summaries = await _usageRepository.GetTimelineSummariesAsync(cancellationToken).ConfigureAwait(false);
-		return JsonSerializer.Serialize(new { timelineSummaries = summaries }, IndentedOptions);
+		return JsonSerializer.Serialize(new { timelineSummaries = summaries }, JsonOptions.Indented);
 	}
 }
 #pragma warning restore IL2026

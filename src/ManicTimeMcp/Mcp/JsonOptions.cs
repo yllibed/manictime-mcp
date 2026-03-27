@@ -14,4 +14,13 @@ internal static class JsonOptions
 		DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
 		Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
 	};
+
+	/// <summary>Same as <see cref="Default"/> but with indented output for human-readable CLI display.</summary>
+	internal static JsonSerializerOptions Indented { get; } = new()
+	{
+		PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+		WriteIndented = true,
+		DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+		Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+	};
 }

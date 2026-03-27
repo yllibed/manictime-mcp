@@ -251,12 +251,20 @@ internal static class ManicTimeReplHandlers
 		};
 	}
 
-	public static string GetScreenshotResource(
+	public static object GetScreenshotResource(
 		[Description("Screenshot reference from screenshot list.")] string screenshotRef,
 		[FromServices] IScreenshotRegistry registry,
 		[FromServices] IScreenshotService screenshotService)
 	{
 		var result = GetScreenshot(screenshotRef, registry, screenshotService);
+
+		// Propagate Repl error results (NotFound, Validation) directly
+		// instead of serializing them as successful JSON strings.
+		if (result is IReplResult)
+		{
+			return result;
+		}
+
 		return JsonSerializer.Serialize(result, JsonOptions.Default);
 	}
 
