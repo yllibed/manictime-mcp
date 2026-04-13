@@ -14,6 +14,6 @@ public sealed class ScreenshotListOptions
 
 	/// <summary>Gets or sets the sampling strategy.</summary>
 	[ReplOption(Name = "samplingStrategy")]
-	[Description("Sampling strategy: activity_transition or interval.")]
+	[Description("Sampling strategy: 'activity_transition' (default, picks screenshots near app switches) or 'interval' (evenly spaced).")]
 	public string SamplingStrategy { get; set; } = "activity_transition";
 }

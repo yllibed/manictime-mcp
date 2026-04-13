@@ -6,6 +6,17 @@ internal static class GuideContent
 	internal static string Text { get; } = """
 		# ManicTime MCP Usage Guide
 
+		## Getting Started
+
+		1. Read manictime://resource/health to check server status and capabilities.
+		   - healthy: all checks passed.
+		   - potentiallyDegraded: informational issues (e.g. untested ManicTime version); functionality believed intact.
+		   - degraded: reduced functionality (e.g. ManicTime process not running, screenshots unavailable).
+		   - unhealthy: fatal issues; server cannot operate normally.
+		2. Read manictime://resource/data-range to discover available date boundaries per timeline.
+		3. Read manictime://resource/environment for device and OS context.
+		4. Use the decision tree below to pick the right tool for the user's question.
+
 		## Tool Inventory
 
 		| Repl Route | MCP Tool | Purpose | Best For |
@@ -56,8 +67,10 @@ internal static class GuideContent
 
 		### "Why No Screenshots?" Diagnostics
 		1. Run screenshot list and inspect diagnostics and truncation data.
-		2. Read manictime://resource/health to check screenshot directory status.
+		2. Read manictime://resource/health to check screenshot directory status and overall health.
 		3. Read manictime://resource/data-range to verify that data exists for the period.
+		4. Read manictime://resource/config to confirm the data directory is resolved correctly.
+		5. Read manictime://resource/environment for device context if the issue is environment-specific.
 
 		## Data Model
 

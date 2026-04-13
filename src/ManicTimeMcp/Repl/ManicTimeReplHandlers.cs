@@ -22,8 +22,8 @@ internal static class ManicTimeReplHandlers
 			await tools.GetTimelinesAsync(cancellationToken).ConfigureAwait(false));
 
 	public static async Task<object> ListActivitiesAsync(
-		[Description("Timeline identifier returned by timeline list.")] long timelineId,
-		[Description("Inclusive activity date range.")] ReplDateRange period,
+		[Description("Timeline ID from timeline list (e.g. 1 for Applications, 4 for Documents).")] long timelineId,
+		[Description("Date range as YYYY-MM-DD..YYYY-MM-DD (e.g. 2026-04-01..2026-04-07).")] ReplDateRange period,
 		ActivityListOptions? options,
 		[FromServices] ActivityTools tools,
 		CancellationToken cancellationToken)
@@ -40,7 +40,7 @@ internal static class ManicTimeReplHandlers
 	}
 
 	public static async Task<object> ListComputerUsageAsync(
-		[Description("Inclusive computer-usage date range.")] ReplDateRange period,
+		[Description("Date range as YYYY-MM-DD..YYYY-MM-DD (e.g. 2026-04-01..2026-04-07).")] ReplDateRange period,
 		LimitOptions? options,
 		[FromServices] ActivityTools tools,
 		CancellationToken cancellationToken)
@@ -55,7 +55,7 @@ internal static class ManicTimeReplHandlers
 	}
 
 	public static async Task<object> ListTagsAsync(
-		[Description("Inclusive tag date range.")] ReplDateRange period,
+		[Description("Date range as YYYY-MM-DD..YYYY-MM-DD (e.g. 2026-04-01..2026-04-07).")] ReplDateRange period,
 		LimitOptions? options,
 		[FromServices] ActivityTools tools,
 		CancellationToken cancellationToken)
@@ -70,7 +70,7 @@ internal static class ManicTimeReplHandlers
 	}
 
 	public static async Task<object> ListApplicationUsageAsync(
-		[Description("Inclusive application-usage date range.")] ReplDateRange period,
+		[Description("Date range as YYYY-MM-DD..YYYY-MM-DD (e.g. 2026-04-01..2026-04-07).")] ReplDateRange period,
 		LimitOptions? options,
 		[FromServices] ActivityTools tools,
 		CancellationToken cancellationToken)
@@ -85,7 +85,7 @@ internal static class ManicTimeReplHandlers
 	}
 
 	public static async Task<object> ListDocumentUsageAsync(
-		[Description("Inclusive document-usage date range.")] ReplDateRange period,
+		[Description("Date range as YYYY-MM-DD..YYYY-MM-DD (e.g. 2026-04-01..2026-04-07).")] ReplDateRange period,
 		LimitOptions? options,
 		[FromServices] ActivityTools tools,
 		CancellationToken cancellationToken)
@@ -100,7 +100,7 @@ internal static class ManicTimeReplHandlers
 	}
 
 	public static async Task<object> ListWebsiteUsageAsync(
-		[Description("Inclusive website-usage date range.")] ReplDateRange period,
+		[Description("Date range as YYYY-MM-DD..YYYY-MM-DD (e.g. 2026-04-01..2026-04-07).")] ReplDateRange period,
 		WebsiteUsageOptions? options,
 		[FromServices] NarrativeTools tools,
 		CancellationToken cancellationToken)
@@ -116,7 +116,7 @@ internal static class ManicTimeReplHandlers
 	}
 
 	public static async Task<object> BuildDailySummaryAsync(
-		[Description("Date to summarize.")] DateOnly date,
+		[Description("Date as YYYY-MM-DD (e.g. 2026-04-12).")] DateOnly date,
 		DailySummaryOptions? options,
 		[FromServices] NarrativeTools tools,
 		CancellationToken cancellationToken)
@@ -134,7 +134,7 @@ internal static class ManicTimeReplHandlers
 	}
 
 	public static async Task<object> BuildNarrativeSummaryAsync(
-		[Description("Inclusive narrative date range.")] ReplDateRange period,
+		[Description("Date range as YYYY-MM-DD..YYYY-MM-DD (e.g. 2026-04-01..2026-04-07). Single day: use same date for both.")] ReplDateRange period,
 		NarrativeSummaryOptions? options,
 		[FromServices] NarrativeTools tools,
 		CancellationToken cancellationToken)
@@ -153,7 +153,7 @@ internal static class ManicTimeReplHandlers
 	}
 
 	public static async Task<object> BuildPeriodSummaryAsync(
-		[Description("Inclusive period date range.")] ReplDateRange period,
+		[Description("Date range as YYYY-MM-DD..YYYY-MM-DD (e.g. 2026-04-07..2026-04-13 for a week).")] ReplDateRange period,
 		[FromServices] NarrativeTools tools,
 		CancellationToken cancellationToken) =>
 		ReplToolResultAdapter.FromToolResult(
@@ -163,7 +163,7 @@ internal static class ManicTimeReplHandlers
 				cancellationToken).ConfigureAwait(false));
 
 	public static async Task<object> ListScreenshotsAsync(
-		[Description("Inclusive screenshot time window.")] ReplDateTimeRange window,
+		[Description("DateTime range as YYYY-MM-DDThh:mm:ss..YYYY-MM-DDThh:mm:ss (e.g. 2026-04-12T09:00:00..2026-04-12T10:00:00).")] ReplDateTimeRange window,
 		ScreenshotListOptions? options,
 		[FromServices] IScreenshotService screenshotService,
 		[FromServices] IScreenshotRegistry registry,
@@ -213,7 +213,7 @@ internal static class ManicTimeReplHandlers
 	}
 
 	public static object GetScreenshot(
-		[Description("Screenshot reference returned by screenshot list.")] string screenshotRef,
+		[Description("Opaque reference from screenshot list. Always discover via screenshot list first.")] string screenshotRef,
 		[FromServices] IScreenshotRegistry registry,
 		[FromServices] IScreenshotService screenshotService)
 	{
@@ -254,7 +254,7 @@ internal static class ManicTimeReplHandlers
 	}
 
 	public static object GetScreenshotResource(
-		[Description("Screenshot reference from screenshot list.")] string screenshotRef,
+		[Description("Opaque reference from screenshot list. Always discover via screenshot list first.")] string screenshotRef,
 		[FromServices] IScreenshotRegistry registry,
 		[FromServices] IScreenshotService screenshotService)
 	{
@@ -271,12 +271,12 @@ internal static class ManicTimeReplHandlers
 	}
 
 	public static object CropScreenshot(
-		[Description("Screenshot reference returned by screenshot list.")] string screenshotRef,
-		[Description("Left crop edge.")] double x,
-		[Description("Top crop edge.")] double y,
-		[Description("Crop width.")] double width,
-		[Description("Crop height.")] double height,
-		[Description("Coordinate units: percent or normalized.")] string? coordinateUnits,
+		[Description("Opaque reference from screenshot list. Always discover via screenshot list first.")] string screenshotRef,
+		[Description("Left edge of crop rectangle (0-100 in percent mode).")] double x,
+		[Description("Top edge of crop rectangle (0-100 in percent mode).")] double y,
+		[Description("Width of crop rectangle (0-100 in percent mode).")] double width,
+		[Description("Height of crop rectangle (0-100 in percent mode).")] double height,
+		[Description("Coordinate system: 'percent' (0-100, default) or 'normalized' (0-1).")] string? coordinateUnits,
 		[FromServices] IScreenshotRegistry registry,
 		[FromServices] IScreenshotService screenshotService,
 		[FromServices] ICropService cropService)
@@ -325,7 +325,7 @@ internal static class ManicTimeReplHandlers
 	}
 
 	public static async Task<object> SaveScreenshotAsync(
-		[Description("Screenshot reference returned by screenshot list.")] string screenshotRef,
+		[Description("Opaque reference from screenshot list. Always discover via screenshot list first.")] string screenshotRef,
 		ScreenshotSaveOptions? saveOptions,
 		ScreenshotCropOptions? cropOptions,
 		[FromServices] IScreenshotRegistry registry,
@@ -430,7 +430,7 @@ internal static class ManicTimeReplHandlers
 		CancellationToken cancellationToken) =>
 		resources.GetDataRangeAsync(cancellationToken);
 
-	public static string BuildDailyReviewPrompt([Description("Date to review.")] DateOnly date)
+	public static string BuildDailyReviewPrompt([Description("Date as YYYY-MM-DD (e.g. 2026-04-12).")] DateOnly date)
 	{
 		var nextDay = date.AddDays(1);
 		return $"""
@@ -440,14 +440,14 @@ internal static class ManicTimeReplHandlers
 	}
 
 	public static string BuildWeeklyReviewPrompt(
-		[Description("Inclusive weekly review date range.")] ReplDateRange period) =>
+		[Description("Date range as YYYY-MM-DD..YYYY-MM-DD (e.g. 2026-04-07..2026-04-13).")] ReplDateRange period) =>
 		$"""
 			Use `summary period --period {ToDateLiteral(period.From)}..{ToDateLiteral(period.To)}`.
 			Highlight busiest days, quietest days, repeated patterns, and the most important applications and websites across the period.
 			""";
 
 	public static string BuildScreenshotInvestigationPrompt(
-		[Description("Date-time window for the investigation.")] ReplDateTimeRange window) =>
+		[Description("DateTime range as YYYY-MM-DDThh:mm:ss..YYYY-MM-DDThh:mm:ss (e.g. 2026-04-12T09:00:00..2026-04-12T10:00:00).")] ReplDateTimeRange window) =>
 		$"""
 			Use `screenshot list --window {window.From:yyyy-MM-ddTHH:mm:ss}..{window.To:yyyy-MM-ddTHH:mm:ss}` to discover candidates.
 			Fetch the best candidate with `screenshot get`, crop the relevant region with `screenshot crop`, and then correlate it with `summary narrative` for the surrounding day.

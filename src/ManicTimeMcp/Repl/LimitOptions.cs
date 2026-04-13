@@ -9,6 +9,6 @@ public sealed class LimitOptions
 {
 	/// <summary>Gets or sets the maximum number of returned rows.</summary>
 	[ReplOption(Name = "limit")]
-	[Description("Maximum number of returned rows.")]
+	[Description("Maximum rows to return. Omit for server default (typically 1000).")]
 	public int? Limit { get; set; }
 }

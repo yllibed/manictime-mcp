@@ -14,7 +14,7 @@ public sealed class DailySummaryOptions
 
 	/// <summary>Gets or sets the minimum segment duration in minutes.</summary>
 	[ReplOption(Name = "minDurationMinutes")]
-	[Description("Minimum segment duration in minutes.")]
+	[Description("Minimum segment duration in minutes. Use to filter short app flickers (e.g. 2 to keep only sustained activity).")]
 	public double MinDurationMinutes { get; set; }
 
 	/// <summary>Gets or sets a value indicating whether hourly website detail is included.</summary>

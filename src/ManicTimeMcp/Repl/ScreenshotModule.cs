@@ -40,6 +40,9 @@ internal sealed class ScreenshotModule : IReplModule
 	{
 		screenshot.Map("crop", ManicTimeReplHandlers.CropScreenshot)
 			.WithDescription("Crop a screenshot region of interest.")
+			.WithDetails(
+				"Extracts a rectangular region from a screenshot. Coordinates default to percent (0-100) of image dimensions. " +
+				"Cropped images are sharper and more meaningful for reports than full-screen thumbnails.")
 			.ReadOnly();
 	}
 

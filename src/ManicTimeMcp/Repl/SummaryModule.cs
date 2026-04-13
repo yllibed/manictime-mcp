@@ -34,6 +34,9 @@ internal sealed class SummaryModule : IReplModule
 	{
 		summary.Map("period", ManicTimeReplHandlers.BuildPeriodSummaryAsync)
 			.WithDescription("Build a multi-day summary with patterns and day breakdowns.")
+			.WithDetails(
+				"Returns per-day summaries, busiest/quietest days, repeated patterns, and top apps/websites across the range. " +
+				"Best for weekly or monthly reviews. For single-day detail, prefer summary daily or summary narrative.")
 			.ReadOnly();
 	}
 }
