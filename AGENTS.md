@@ -42,6 +42,45 @@ dotnet test --solution src/ManicTimeMcp.slnx
 - `dotnet test` requires `--solution` flag (not a bare positional path).
 - The test runner is Microsoft Testing Platform (MTP), configured in the `"test"` section of `global.json`.
 
+## CLI Smoke Testing During Development
+
+The MCP server doubles as a CLI tool. Use it to inspect health, timelines, and data without attaching an MCP client.
+
+```bash
+# Health check — shows status, schema, capabilities, issues
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- resource health --output:json
+
+# List available timelines
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- timeline list
+
+# Full command help
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- --help
+```
+
+The `--` separator is required so `dotnet run` passes arguments to the app, not to the launcher.
+
+### Running without a local ManicTime installation
+
+ManicTime may not be installed on every dev machine. The server resolves the data directory in this order:
+
+1. `MANICTIME_DATA_DIR` environment variable (all platforms)
+2. Registry `HKCU\SOFTWARE\Finkit\ManicTime\DataDirectory` (Windows)
+3. `%LOCALAPPDATA%\Finkit\ManicTime\` (Windows default)
+
+To point the server at a copy of a ManicTime database (e.g. from a colleague or a test fixture), set the environment variable before running:
+
+```bash
+# Bash
+export MANICTIME_DATA_DIR=/path/to/folder/containing/ManicTimeReports.db
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- resource health --output:json
+
+# PowerShell
+$env:MANICTIME_DATA_DIR = "C:\path\to\folder"
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- resource health --output:json
+```
+
+The folder must contain `ManicTimeReports.db`. The database is opened read-only; the server never writes to it.
+
 ## Packaging Smoke Command
 
 ```
