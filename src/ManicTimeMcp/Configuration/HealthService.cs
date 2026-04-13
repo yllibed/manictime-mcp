@@ -19,7 +19,7 @@ public sealed class HealthService : IHealthService
 	internal const string ScreenshotRemediationHint = "Review ManicTime screenshot capture and retention settings.";
 
 	/// <summary>ManicTime desktop version that this MCP server was validated against.</summary>
-	internal const string TestedManicTimeVersion = "2026.1.0.5";
+	internal const string TestedManicTimeVersion = "2026.1.2.1";
 
 	private readonly IDataDirectoryResolver _resolver;
 	private readonly IPlatformEnvironment _platform;
@@ -85,6 +85,7 @@ public sealed class HealthService : IHealthService
 	{
 		var hasFatal = false;
 		var hasWarning = false;
+		var hasInfo = false;
 
 		foreach (var issue in issues)
 		{
@@ -96,6 +97,9 @@ public sealed class HealthService : IHealthService
 				case ValidationSeverity.Warning:
 					hasWarning = true;
 					break;
+				case ValidationSeverity.Info:
+					hasInfo = true;
+					break;
 			}
 		}
 
@@ -104,7 +108,12 @@ public sealed class HealthService : IHealthService
 			return HealthStatus.Unhealthy;
 		}
 
-		return hasWarning ? HealthStatus.Degraded : HealthStatus.Healthy;
+		if (hasWarning)
+		{
+			return HealthStatus.Degraded;
+		}
+
+		return hasInfo ? HealthStatus.PotentiallyDegraded : HealthStatus.Healthy;
 	}
 
 	private static void CheckDataDirectory(DataDirectoryResult directoryResult, List<ValidationIssue> issues)
@@ -206,7 +215,7 @@ public sealed class HealthService : IHealthService
 			issues.Add(new ValidationIssue
 			{
 				Code = IssueCode.ManicTimeVersionUntested,
-				Severity = ValidationSeverity.Warning,
+				Severity = ValidationSeverity.Info,
 				Message = $"Detected ManicTime {version}; this server was tested with {TestedManicTimeVersion}.",
 				Remediation = "Verify MCP tool results are accurate. Report issues at https://github.com/yllibed/manictime-mcp.",
 			});

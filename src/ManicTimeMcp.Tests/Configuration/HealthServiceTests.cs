@@ -14,7 +14,7 @@ public sealed class HealthServiceTests
 	private const string TestScreenshotDir = @"C:\TestManicTime\Screenshots";
 	private const string TestInstallDir = @"C:\Program Files\ManicTime\";
 	private const string TestExePath = @"C:\Program Files\ManicTime\ManicTime.exe";
-	private const string TestVersion = "2026.1.0.5";
+	private const string TestVersion = "2026.1.2.1";
 	private const int TestProcessId = 12345;
 
 	#region DeriveStatus
@@ -37,6 +37,44 @@ public sealed class HealthServiceTests
 				Code = IssueCode.ManicTimeProcessNotRunning,
 				Severity = ValidationSeverity.Warning,
 				Message = "test",
+			},
+		};
+
+		HealthService.DeriveStatus(issues).Should().Be(HealthStatus.Degraded);
+	}
+
+	[TestMethod]
+	public void DeriveStatus_OnlyInfo_ReturnsPotentiallyDegraded()
+	{
+		var issues = new List<ValidationIssue>
+		{
+			new()
+			{
+				Code = IssueCode.ManicTimeVersionUntested,
+				Severity = ValidationSeverity.Info,
+				Message = "test",
+			},
+		};
+
+		HealthService.DeriveStatus(issues).Should().Be(HealthStatus.PotentiallyDegraded);
+	}
+
+	[TestMethod]
+	public void DeriveStatus_InfoAndWarning_ReturnsDegraded()
+	{
+		var issues = new List<ValidationIssue>
+		{
+			new()
+			{
+				Code = IssueCode.ManicTimeVersionUntested,
+				Severity = ValidationSeverity.Info,
+				Message = "info",
+			},
+			new()
+			{
+				Code = IssueCode.ManicTimeProcessNotRunning,
+				Severity = ValidationSeverity.Warning,
+				Message = "warning",
 			},
 		};
 
@@ -257,7 +295,7 @@ public sealed class HealthServiceTests
 	}
 
 	[TestMethod]
-	public void GetHealthReport_DifferentVersion_EmitsUntestedWarning()
+	public void GetHealthReport_DifferentVersion_EmitsUntestedInfo()
 	{
 		const string differentVersion = "2025.3.5.0";
 		var resolver = new StubResolver(TestDataDir, DataDirectorySource.EnvironmentVariable);
@@ -276,10 +314,11 @@ public sealed class HealthServiceTests
 		var sut = CreateService(resolver, platform);
 		var report = sut.GetHealthReport();
 
+		report.Status.Should().Be(HealthStatus.PotentiallyDegraded);
 		report.ManicTimeVersion.Should().Be(differentVersion);
 		report.TestedManicTimeVersion.Should().Be(HealthService.TestedManicTimeVersion);
 		var issue = report.Issues.Should().ContainSingle(i => i.Code == IssueCode.ManicTimeVersionUntested).Subject;
-		issue.Severity.Should().Be(ValidationSeverity.Warning);
+		issue.Severity.Should().Be(ValidationSeverity.Info);
 		issue.Message.Should().Contain(differentVersion);
 		issue.Message.Should().Contain(HealthService.TestedManicTimeVersion);
 	}

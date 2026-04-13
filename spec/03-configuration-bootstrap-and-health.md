@@ -50,6 +50,9 @@
   - ManicTime process not running
   - screenshot directory absent or empty (possible retention/capture settings issue)
   - `PRAGMA quick_check` not equal to `ok`
+- Info:
+  - ManicTime version differs from tested version
+  - informational schema tables missing (cosmetic loss only)
 
 ### Health shape (resource)
 

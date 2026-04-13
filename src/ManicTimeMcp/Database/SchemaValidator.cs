@@ -6,7 +6,7 @@ namespace ManicTimeMcp.Database;
 
 /// <summary>
 /// Validates the ManicTimeReports.db schema against <see cref="SchemaManifest"/>.
-/// Core tables missing = Fatal, supplemental/informational missing = Warning.
+/// Core tables missing = Fatal, supplemental missing = Warning, informational missing = Info.
 /// Builds a <see cref="QueryCapabilityMatrix"/> from actual table presence.
 /// </summary>
 public sealed class SchemaValidator : ISchemaValidator
@@ -110,7 +110,7 @@ public sealed class SchemaValidator : ISchemaValidator
 	{
 		TableTier.Core => (ValidationSeverity.Fatal, IssueCode.SchemaValidationFailed),
 		TableTier.Supplemental => (ValidationSeverity.Warning, IssueCode.SupplementalTableMissing),
-		TableTier.Informational => (ValidationSeverity.Warning, IssueCode.SupplementalTableMissing),
+		TableTier.Informational => (ValidationSeverity.Info, IssueCode.SupplementalTableMissing),
 		_ => (ValidationSeverity.Fatal, IssueCode.SchemaValidationFailed),
 	};
 

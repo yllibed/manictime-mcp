@@ -142,7 +142,7 @@ public sealed class SchemaValidatorTests
 		var result = sut.Validate(fixture.FilePath);
 
 		result.Status.Should().Be(SchemaValidationStatus.ValidWithWarnings);
-		result.Issues.Should().OnlyContain(i => i.Severity == ValidationSeverity.Warning);
+		result.Issues.Should().OnlyContain(i => i.Severity == ValidationSeverity.Warning || i.Severity == ValidationSeverity.Info);
 		result.Issues.Should().Contain(i => i.Code == IssueCode.SupplementalTableMissing);
 	}
 
