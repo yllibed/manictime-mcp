@@ -1,6 +1,10 @@
+using System.Text.Json.Serialization;
+using ManicTimeMcp.Mcp;
+
 namespace ManicTimeMcp.Models;
 
 /// <summary>Result of database schema validation.</summary>
+[JsonConverter(typeof(CamelCaseEnumConverter<SchemaValidationStatus>))]
 public enum SchemaValidationStatus
 {
 	/// <summary>Schema matches expected structure.</summary>

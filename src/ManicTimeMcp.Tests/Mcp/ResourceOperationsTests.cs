@@ -1,7 +1,7 @@
-using System.Text.Json.Nodes;
 using AwesomeAssertions;
 using ManicTimeMcp.Database.Dto;
 using ManicTimeMcp.Mcp;
+using ManicTimeMcp.Models;
 
 namespace ManicTimeMcp.Tests.Mcp;
 
@@ -36,21 +36,31 @@ public sealed class ResourceOperationsTests
 	{
 		var resources = CreateResources();
 
-		var result = JsonNode.Parse(resources.GetConfig());
+		var result = resources.GetConfig();
 
-		result.Should().NotBeNull();
-		result!["dataDirectory"]!.GetValue<string>().Should().Be(@"C:\TestData");
+		result.DataDirectory.Should().Be(@"C:\TestData");
 	}
 
 	[TestMethod]
-	public async Task GetTimelinesAsync_ReturnsTimelineArray()
+	public async Task GetTimelinesAsync_ReturnsTimelineList()
 	{
 		var resources = CreateResources();
 
-		var result = JsonNode.Parse(await resources.GetTimelinesAsync(CancellationToken.None).ConfigureAwait(false));
+		var result = await resources.GetTimelinesAsync(CancellationToken.None).ConfigureAwait(false);
+
+		result.Should().ContainSingle();
+		result[0].SchemaName.Should().Be("ManicTime/Applications");
+	}
+
+	[TestMethod]
+	public void GetHealth_ReturnsHealthReport()
+	{
+		var resources = CreateResources();
+
+		var result = resources.GetHealth();
 
 		result.Should().NotBeNull();
-		result!.AsArray()[0]!["schemaName"]!.GetValue<string>().Should().Be("ManicTime/Applications");
+		result.Status.Should().Be(HealthStatus.Healthy);
 	}
 
 	[TestMethod]
@@ -58,10 +68,10 @@ public sealed class ResourceOperationsTests
 	{
 		var resources = CreateResources();
 
-		var result = JsonNode.Parse(await resources.GetEnvironmentAsync(CancellationToken.None).ConfigureAwait(false));
+		var result = await resources.GetEnvironmentAsync(CancellationToken.None).ConfigureAwait(false);
 
-		result.Should().NotBeNull();
-		result!["environments"]!.AsArray()[0]!["deviceName"]!.GetValue<string>().Should().Be("TEST-PC");
+		result.Environments.Should().ContainSingle();
+		result.Environments[0].DeviceName.Should().Be("TEST-PC");
 	}
 
 	[TestMethod]
@@ -69,10 +79,9 @@ public sealed class ResourceOperationsTests
 	{
 		var resources = CreateResources();
 
-		var result = JsonNode.Parse(await resources.GetDataRangeAsync(CancellationToken.None).ConfigureAwait(false));
+		var result = await resources.GetDataRangeAsync(CancellationToken.None).ConfigureAwait(false);
 
-		result.Should().NotBeNull();
-		result!["timelineSummaries"]!.AsArray().Count.Should().Be(1);
+		result.TimelineSummaries.Should().ContainSingle();
 	}
 
 	[TestMethod]

@@ -1,12 +1,12 @@
 using System.ComponentModel;
-using System.Text.Json;
 using ManicTimeMcp.Configuration;
 using ManicTimeMcp.Database;
+using ManicTimeMcp.Database.Dto;
+using ManicTimeMcp.Models;
 
 namespace ManicTimeMcp.Mcp;
 
 /// <summary>Read-only resource operations exposing ManicTime configuration, health, and data.</summary>
-#pragma warning disable IL2026 // Trimming is disabled (PublishTrimmed=false); reflection-based JSON is safe
 public sealed class ManicTimeResources
 {
 	private readonly IDataDirectoryResolver _resolver;
@@ -32,30 +32,28 @@ public sealed class ManicTimeResources
 
 	/// <summary>Returns the current ManicTime configuration.</summary>
 	[Description("ManicTime MCP server configuration including data directory and source.")]
-	public string GetConfig()
+	public ConfigResource GetConfig()
 	{
 		var result = _resolver.Resolve();
-		return JsonSerializer.Serialize(new
+		return new ConfigResource
 		{
-			dataDirectory = result.Path,
-			directorySource = result.Source.ToString(),
-		}, JsonOptions.Indented);
+			DataDirectory = result.Path,
+			DirectorySource = result.Source.ToString(),
+		};
 	}
 
 	/// <summary>Returns available ManicTime timelines.</summary>
 	[Description("List of all ManicTime timelines with schema types.")]
-	public async Task<string> GetTimelinesAsync(CancellationToken cancellationToken)
+	public async Task<IReadOnlyList<TimelineDto>> GetTimelinesAsync(CancellationToken cancellationToken)
 	{
-		var timelines = await _timelineRepository.GetTimelinesAsync(cancellationToken).ConfigureAwait(false);
-		return JsonSerializer.Serialize(timelines, JsonOptions.Indented);
+		return await _timelineRepository.GetTimelinesAsync(cancellationToken).ConfigureAwait(false);
 	}
 
 	/// <summary>Returns the current health diagnostic report.</summary>
 	[Description("Health diagnostic report for the ManicTime MCP environment.")]
-	public string GetHealth()
+	public HealthReport GetHealth()
 	{
-		var report = _healthService.GetHealthReport();
-		return JsonSerializer.Serialize(report, JsonOptions.Indented);
+		return _healthService.GetHealthReport();
 	}
 
 	/// <summary>Returns the model usage guide.</summary>
@@ -64,18 +62,17 @@ public sealed class ManicTimeResources
 
 	/// <summary>Returns device and runtime environment information.</summary>
 	[Description("Device and runtime information from ManicTime environment data.")]
-	public async Task<string> GetEnvironmentAsync(CancellationToken cancellationToken)
+	public async Task<EnvironmentResource> GetEnvironmentAsync(CancellationToken cancellationToken)
 	{
 		var environments = await _environmentRepository.GetEnvironmentsAsync(cancellationToken).ConfigureAwait(false);
-		return JsonSerializer.Serialize(new { environments }, JsonOptions.Indented);
+		return new EnvironmentResource { Environments = environments };
 	}
 
 	/// <summary>Returns available data date ranges from timeline summaries.</summary>
 	[Description("Available data date ranges per timeline. Useful for knowing data boundaries without querying activities.")]
-	public async Task<string> GetDataRangeAsync(CancellationToken cancellationToken)
+	public async Task<DataRangeResource> GetDataRangeAsync(CancellationToken cancellationToken)
 	{
 		var summaries = await _usageRepository.GetTimelineSummariesAsync(cancellationToken).ConfigureAwait(false);
-		return JsonSerializer.Serialize(new { timelineSummaries = summaries }, JsonOptions.Indented);
+		return new DataRangeResource { TimelineSummaries = summaries };
 	}
 }
-#pragma warning restore IL2026

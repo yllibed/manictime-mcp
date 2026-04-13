@@ -1,6 +1,10 @@
+using System.Text.Json.Serialization;
+using ManicTimeMcp.Mcp;
+
 namespace ManicTimeMcp.Models;
 
 /// <summary>Stable machine-readable codes for health and installation diagnostics.</summary>
+[JsonConverter(typeof(CamelCaseEnumConverter<IssueCode>))]
 public enum IssueCode
 {
 	/// <summary>Data directory could not be resolved through any known method.</summary>

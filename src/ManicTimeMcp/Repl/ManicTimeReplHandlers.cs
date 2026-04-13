@@ -2,7 +2,9 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
+using ManicTimeMcp.Database.Dto;
 using ManicTimeMcp.Mcp;
+using ManicTimeMcp.Models;
 using ManicTimeMcp.Screenshots;
 using Repl;
 using Repl.Mcp;
@@ -407,23 +409,23 @@ internal static class ManicTimeReplHandlers
 		};
 	}
 
-	public static string GetConfigResource([FromServices] ManicTimeResources resources) => resources.GetConfig();
+	public static ConfigResource GetConfigResource([FromServices] ManicTimeResources resources) => resources.GetConfig();
 
-	public static Task<string> GetTimelinesResourceAsync(
+	public static Task<IReadOnlyList<TimelineDto>> GetTimelinesResourceAsync(
 		[FromServices] ManicTimeResources resources,
 		CancellationToken cancellationToken) =>
 		resources.GetTimelinesAsync(cancellationToken);
 
-	public static string GetHealthResource([FromServices] ManicTimeResources resources) => resources.GetHealth();
+	public static HealthReport GetHealthResource([FromServices] ManicTimeResources resources) => resources.GetHealth();
 
 	public static string GetGuideResource() => GuideContent.Text;
 
-	public static Task<string> GetEnvironmentResourceAsync(
+	public static Task<EnvironmentResource> GetEnvironmentResourceAsync(
 		[FromServices] ManicTimeResources resources,
 		CancellationToken cancellationToken) =>
 		resources.GetEnvironmentAsync(cancellationToken);
 
-	public static Task<string> GetDataRangeResourceAsync(
+	public static Task<DataRangeResource> GetDataRangeResourceAsync(
 		[FromServices] ManicTimeResources resources,
 		CancellationToken cancellationToken) =>
 		resources.GetDataRangeAsync(cancellationToken);

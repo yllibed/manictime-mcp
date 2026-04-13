@@ -1,6 +1,10 @@
+using System.Text.Json.Serialization;
+using ManicTimeMcp.Mcp;
+
 namespace ManicTimeMcp.Models;
 
 /// <summary>Likely reason screenshots are unavailable.</summary>
+[JsonConverter(typeof(CamelCaseEnumConverter<ScreenshotUnavailableReason>))]
 public enum ScreenshotUnavailableReason
 {
 	/// <summary>Screenshots are available; no reason applies.</summary>
