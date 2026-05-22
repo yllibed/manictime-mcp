@@ -14,7 +14,7 @@ public sealed class HealthServiceTests
 	private const string TestScreenshotDir = @"C:\TestManicTime\Screenshots";
 	private const string TestInstallDir = @"C:\Program Files\ManicTime\";
 	private const string TestExePath = @"C:\Program Files\ManicTime\ManicTime.exe";
-	private const string TestVersion = "2026.1.4.0";
+	private const string TestVersion = "2026.1.5.0";
 	private const int TestProcessId = 12345;
 
 	#region DeriveStatus
