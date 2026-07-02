@@ -21,7 +21,7 @@ internal sealed class ActivityModule : IReplModule
 			.WithDetails(
 				"Returns raw activity records with start/end times, group metadata, and optional enriched fields. " +
 				"Use timeline list first to discover valid timeline IDs. " +
-				"Prefer usage applications or summary narrative for high-level overviews; use this for drill-down into specific timelines.")
+				"Prefer usage summary or summary narrative for high-level overviews; use this for drill-down into specific timelines.")
 			.ReadOnly();
 	}
 
@@ -40,8 +40,8 @@ internal sealed class ActivityModule : IReplModule
 		activity.Map("tags", ManicTimeReplHandlers.ListTagsAsync)
 			.WithDescription("List tag activities for a date range.")
 			.WithDetails(
-				"Returns user-defined ManicTime tags with time aggregates. " +
-				"Tags are manual annotations the user applies in ManicTime for categorization (e.g. projects, clients).")
+				"Returns user-defined ManicTime tag intervals from the raw Tags timeline. " +
+				"Use usage summary with type tags for daily aggregate totals.")
 			.ReadOnly();
 	}
 }

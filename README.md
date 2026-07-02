@@ -126,10 +126,7 @@ codex mcp add manictime-mcp -- dnx -y ManicTimeMcp mcp serve
 | `timeline list` | `timeline_list` | List available ManicTime timelines |
 | `activity list` | `activity_list` | Raw activities from a specific timeline |
 | `activity computer-usage` | `activity_computer-usage` | Computer on/off/idle/locked activities |
-| `activity tags` | `activity_tags` | User-defined tags and labels |
-| `usage applications` | `usage_applications` | Application usage for a date range |
-| `usage documents` | `usage_documents` | Document usage for a date range |
-| `usage websites` | `usage_websites` | Website usage with hourly or daily breakdown |
+| `usage summary` | `usage_summary` | Consolidated application, website, document, tag, and active-time usage |
 | `summary daily` | `summary_daily` | Structured summary for a single day |
 | `summary narrative` | `summary_narrative` | Structured "what did I do?" narrative |
 | `summary period` | `summary_period` | Multi-day overview with patterns and breakdowns |

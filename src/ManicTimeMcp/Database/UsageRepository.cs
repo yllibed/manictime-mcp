@@ -71,6 +71,13 @@ public sealed class UsageRepository : IUsageRepository
 			: GetDailyUsageFallbackAsync(["ManicTime/Documents"], startDay, endDay, limit, cancellationToken, FilesGroupType);
 
 	/// <inheritdoc />
+	public Task<IReadOnlyList<DailyUsageDto>> GetDailyTagUsageAsync(
+		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default) =>
+		_capabilities.HasTags
+			? GetDailyUsageAsync("Ar_TagListByDay", startDay, endDay, limit, cancellationToken)
+			: Task.FromResult<IReadOnlyList<DailyUsageDto>>([]);
+
+	/// <inheritdoc />
 	public Task<IReadOnlyList<DayOfWeekUsageDto>> GetDayOfWeekAppUsageAsync(
 		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default) =>
 		_capabilities.HasYearlyUsage

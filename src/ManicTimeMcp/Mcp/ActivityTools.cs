@@ -212,6 +212,200 @@ public sealed class ActivityTools
 		}
 	}
 
+	/// <summary>Returns a consolidated usage summary: apps, websites, documents, tags, and total active time.</summary>
+	[Description("Get a consolidated usage summary for a date range. Returns top applications, websites, documents, tags, and total active computer time in a single response.")]
+	public async Task<ToolInvocationResult> GetUsageSummaryAsync(
+		[Description("Start date (ISO-8601, e.g. 2025-01-15)")] string startDate,
+		[Description("End date (ISO-8601, e.g. 2025-01-16)")] string endDate,
+		[Description("Filter to a specific type: applications, websites, documents, tags, or all")] string type = "all",
+		[Description("Maximum items per section (default 1000, max 2000)")] int? limit = null,
+		[Description("Minimum minutes to include a website (default 0.5)")] double minMinutes = 0.5,
+		CancellationToken cancellationToken = default)
+	{
+		try
+		{
+			return await BuildUsageSummaryAsync(startDate, endDate, type, limit, minMinutes, cancellationToken).ConfigureAwait(false);
+		}
+		catch (FormatException ex)
+		{
+			return ToolResults.Error($"Invalid date format. Expected ISO-8601 (yyyy-MM-dd). {ex.Message}");
+		}
+		catch (SqliteException ex)
+		{
+			return ToolResults.Error($"Database error: {ex.Message}. Try reading the manictime://resource/health resource to diagnose the issue.");
+		}
+		catch (InvalidOperationException ex)
+		{
+			return ToolResults.Error($"Database is busy after retries: {ex.Message}. ManicTime may be performing a long write operation.");
+		}
+	}
+
+	private async Task<ToolInvocationResult> BuildUsageSummaryAsync(
+		string startDate, string endDate, string type, int? limit, double minMinutes, CancellationToken cancellationToken)
+	{
+		var (startDay, endDay) = ParseDayRange(startDate, endDate);
+		if (!IsValidUsageSummaryType(type))
+		{
+			return ToolResults.Error("Invalid usage summary type. Expected one of: all, applications, websites, documents, tags.", "invalid_usage_type");
+		}
+
+		var effectiveLimit = QueryLimits.Clamp(limit, QueryLimits.DefaultUsageLimit, QueryLimits.MaxDailyUsageRows);
+
+		var (appRaw, webRaw, docRaw, tagRaw, usageActivities, activityFallback) = await FetchUsageDataAsync(
+			startDate, startDay, endDay, type, cancellationToken).ConfigureAwait(false);
+
+		return ToolResults.Success(JsonSerializer.Serialize(new
+		{
+			startDate,
+			endDate,
+			totalActiveMinutes = ComputeSummaryActiveMinutes(usageActivities, activityFallback),
+			applications = AggregateToSummary(appRaw, effectiveLimit),
+			websites = AggregateToSummary(
+				webRaw.Where(static web => NarrativeTools.IsValidWebsiteName(web.Name)).ToList(),
+				effectiveLimit,
+				minMinutes),
+			documents = AggregateToSummary(docRaw, effectiveLimit),
+			tags = AggregateToSummary(tagRaw, effectiveLimit),
+			diagnostics = BuildUsageSummaryDiagnostics(type),
+		}, JsonOptions.Default));
+	}
+
+	private async Task<(
+		IReadOnlyList<Database.Dto.DailyUsageDto> Apps,
+		IReadOnlyList<Database.Dto.DailyUsageDto> Web,
+		IReadOnlyList<Database.Dto.DailyUsageDto> Docs,
+		IReadOnlyList<Database.Dto.DailyUsageDto> Tags,
+		IReadOnlyList<Database.Dto.ActivityDto> Usage,
+		IReadOnlyList<Database.Dto.ActivityDto> ActivityFallback)> FetchUsageDataAsync(
+		string startDate, string startDay, string endDay, string type, CancellationToken ct)
+	{
+		var includeAll = string.Equals(type, "all", StringComparison.OrdinalIgnoreCase);
+		var empty = Task.FromResult<IReadOnlyList<Database.Dto.DailyUsageDto>>([]);
+		var fetchLimit = QueryLimits.MaxDailyUsageRows;
+
+		var appTask = includeAll || string.Equals(type, "applications", StringComparison.OrdinalIgnoreCase)
+			? _usageRepository.GetDailyAppUsageAsync(startDay, endDay, fetchLimit, ct) : empty;
+		var webTask = includeAll || string.Equals(type, "websites", StringComparison.OrdinalIgnoreCase)
+			? _usageRepository.GetDailyWebUsageAsync(startDay, endDay, fetchLimit, ct) : empty;
+		var docTask = includeAll || string.Equals(type, "documents", StringComparison.OrdinalIgnoreCase)
+			? _usageRepository.GetDailyDocUsageAsync(startDay, endDay, fetchLimit, ct) : empty;
+		var tagTask = includeAll || string.Equals(type, "tags", StringComparison.OrdinalIgnoreCase)
+			? _usageRepository.GetDailyTagUsageAsync(startDay, endDay, fetchLimit, ct) : empty;
+
+		var usageTask = FetchComputerUsageActivitiesAsync(startDate, endDay, ct);
+
+		await Task.WhenAll(appTask, webTask, docTask, tagTask, usageTask).ConfigureAwait(false);
+		var usage = await usageTask.ConfigureAwait(false);
+		var activityFallback = usage.Count == 0
+			? await FetchApplicationActivitiesAsync(startDate, endDay, ct).ConfigureAwait(false)
+			: [];
+
+		return (
+			await appTask.ConfigureAwait(false),
+			await webTask.ConfigureAwait(false),
+			await docTask.ConfigureAwait(false),
+			await tagTask.ConfigureAwait(false),
+			usage,
+			activityFallback);
+	}
+
+	private async Task<IReadOnlyList<Database.Dto.ActivityDto>> FetchComputerUsageActivitiesAsync(
+		string startDate, string endDay, CancellationToken ct)
+	{
+		var (startLocal, endLocal) = ParseDateRange(startDate, endDay);
+		var timelines = await _timelineRepository.GetTimelinesAsync(ct).ConfigureAwait(false);
+		var usageTimeline = timelines.FirstOrDefault(t =>
+			t.SchemaName.Equals("ManicTime/ComputerUsage", StringComparison.OrdinalIgnoreCase) ||
+			t.BaseSchemaName.Equals("ManicTime/ComputerUsage", StringComparison.OrdinalIgnoreCase));
+
+		if (usageTimeline is null)
+		{
+			return [];
+		}
+
+		return await _activityRepository.GetActivitiesAsync(
+			usageTimeline.ReportId, startLocal, endLocal, QueryLimits.MaxActivities, ct).ConfigureAwait(false);
+	}
+
+	private async Task<IReadOnlyList<Database.Dto.ActivityDto>> FetchApplicationActivitiesAsync(
+		string startDate, string endDay, CancellationToken ct)
+	{
+		var (startLocal, endLocal) = ParseDateRange(startDate, endDay);
+		var timelines = await _timelineRepository.GetTimelinesAsync(ct).ConfigureAwait(false);
+		var appTimeline = timelines.FirstOrDefault(t =>
+			t.SchemaName.Equals("ManicTime/Applications", StringComparison.OrdinalIgnoreCase) ||
+			t.BaseSchemaName.Equals("ManicTime/Applications", StringComparison.OrdinalIgnoreCase));
+
+		if (appTimeline is null)
+		{
+			return [];
+		}
+
+		return await _activityRepository.GetActivitiesAsync(
+			appTimeline.ReportId, startLocal, endLocal, QueryLimits.MaxActivities, ct).ConfigureAwait(false);
+	}
+
+	private static List<UsageSummaryEntry> AggregateToSummary(
+		IReadOnlyList<Database.Dto.DailyUsageDto> dailyUsage, int limit, double minMinutes = 0)
+	{
+		return dailyUsage
+			.GroupBy(d => new { d.Name, d.Key })
+			.Select(g => new UsageSummaryEntry
+			{
+				Name = g.Key.Name,
+				Key = g.Key.Key,
+				Color = g.First().Color,
+				TotalMinutes = Math.Round(g.Sum(x => x.TotalSeconds) / 60.0, digits: 1),
+			})
+			.Where(e => e.TotalMinutes >= minMinutes)
+			.OrderByDescending(e => e.TotalMinutes)
+			.Take(limit)
+			.ToList();
+	}
+
+	private static double ComputeSummaryActiveMinutes(
+		IReadOnlyList<Database.Dto.ActivityDto> usageActivities,
+		IReadOnlyList<Database.Dto.ActivityDto> activityFallback)
+	{
+		if (usageActivities.Count > 0)
+		{
+			return NarrativeTools.ComputeTotalActiveMinutes(usageActivities);
+		}
+
+		return Math.Round(activityFallback.Sum(activity =>
+		{
+			var start = DateTime.ParseExact(activity.StartLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+			var end = DateTime.ParseExact(activity.EndLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+			return (end - start).TotalMinutes;
+		}), digits: 1);
+	}
+
+	private DiagnosticsInfo BuildUsageSummaryDiagnostics(string type)
+	{
+		var includeAll = string.Equals(type, "all", StringComparison.OrdinalIgnoreCase);
+		var degraded =
+			(includeAll || string.Equals(type, "applications", StringComparison.OrdinalIgnoreCase)) && !_capabilities.HasPreAggregatedAppUsage
+			|| (includeAll || string.Equals(type, "websites", StringComparison.OrdinalIgnoreCase)) && !_capabilities.HasPreAggregatedWebUsage
+			|| (includeAll || string.Equals(type, "documents", StringComparison.OrdinalIgnoreCase)) && !_capabilities.HasPreAggregatedDocUsage
+			|| (includeAll || string.Equals(type, "tags", StringComparison.OrdinalIgnoreCase)) && !_capabilities.HasTags;
+
+		return degraded
+			? new DiagnosticsInfo
+			{
+				Degraded = true,
+				ReasonCode = "FallbackComputation",
+				RemediationHint = "Some requested pre-aggregated tables are unavailable. Results may be computed from raw activities or omitted when no fallback exists.",
+			}
+			: DiagnosticsInfo.Ok;
+	}
+
+	private static bool IsValidUsageSummaryType(string type) =>
+		string.Equals(type, "all", StringComparison.OrdinalIgnoreCase)
+		|| string.Equals(type, "applications", StringComparison.OrdinalIgnoreCase)
+		|| string.Equals(type, "websites", StringComparison.OrdinalIgnoreCase)
+		|| string.Equals(type, "documents", StringComparison.OrdinalIgnoreCase)
+		|| string.Equals(type, "tags", StringComparison.OrdinalIgnoreCase);
+
 	private async Task<ToolInvocationResult> GetEnrichedActivitiesResultAsync(
 		long timelineId, string startDate, string endDate,
 		string startLocal, string endLocal, int effectiveLimit,

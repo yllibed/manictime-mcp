@@ -25,6 +25,10 @@ public interface IUsageRepository
 	Task<IReadOnlyList<DailyUsageDto>> GetDailyDocUsageAsync(
 		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default);
 
+	/// <summary>Returns daily tag usage for a date range.</summary>
+	Task<IReadOnlyList<DailyUsageDto>> GetDailyTagUsageAsync(
+		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default);
+
 	/// <summary>Returns day-of-week aggregated application usage for pattern analysis.</summary>
 	Task<IReadOnlyList<DayOfWeekUsageDto>> GetDayOfWeekAppUsageAsync(
 		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default);

@@ -23,14 +23,11 @@ internal static class GuideContent
 		|---|---|---|---|
 		| timeline list | timeline_list | List available timelines | Discovery |
 		| activity list | activity_list | Raw activity data with enriched fields | Drill-down |
-		| usage applications | usage_applications | App usage from pre-aggregated tables | Usage analysis |
-		| usage documents | usage_documents | Document usage from pre-aggregated tables | File tracking |
 		| activity computer-usage | activity_computer-usage | Computer on/off periods | Availability |
-		| activity tags | activity_tags | User-defined tags | Categorization |
+		| usage summary | usage_summary | Apps, websites, documents, tags, and active time | Usage analysis |
 		| summary narrative | summary_narrative | Structured "what did I do?" | Single-day recap |
 		| summary period | summary_period | Multi-day overview with patterns | Weekly/monthly review |
 		| summary daily | summary_daily | Daily activity summary (single-call recap) | Quick daily overview |
-		| usage websites | usage_websites | Website usage with hourly or daily breakdown | Web tracking |
 		| screenshot list | screenshot_list | Screenshot metadata (zero image bytes) | Discovery |
 		| screenshot get | screenshot_get | Single screenshot payload | Visual inspection |
 		| screenshot crop | screenshot_crop | Region crop from screenshot | Detail extraction |
@@ -40,10 +37,10 @@ internal static class GuideContent
 
 		- "What did I do today/yesterday?" -> summary narrative (`summary_narrative` in MCP) and check suggested screenshots for visual context.
 		- "How was my week/month?" -> summary period (`summary_period` in MCP).
-		- "What websites did I use?" -> usage websites (`usage_websites` in MCP).
+		- "What websites did I use?" -> usage summary with type websites (`usage_summary` in MCP).
 		- "What was I doing at 3pm?" -> activity list (`activity_list` in MCP) for a narrow period, then screenshot list.
 		- "Show me screenshots" -> screenshot list -> screenshot get -> screenshot crop -> screenshot save.
-		- "What apps do I use most?" -> usage applications (`usage_applications` in MCP).
+		- "What apps do I use most?" -> usage summary with type applications (`usage_summary` in MCP).
 
 		## Playbooks
 

@@ -115,6 +115,24 @@ internal static class ManicTimeReplHandlers
 				cancellationToken).ConfigureAwait(false));
 	}
 
+
+	public static async Task<object> ListUsageSummaryAsync(
+		[Description("Date range as YYYY-MM-DD..YYYY-MM-DD (e.g. 2026-04-01..2026-04-07).")] ReplDateRange period,
+		UsageSummaryOptions? options,
+		[FromServices] ActivityTools tools,
+		CancellationToken cancellationToken)
+	{
+		options ??= new UsageSummaryOptions();
+		return ReplToolResultAdapter.FromToolResult(
+			await tools.GetUsageSummaryAsync(
+				ToDateLiteral(period.From),
+				ToDateLiteral(period.To),
+				options.Type,
+				options.Limit,
+				options.MinMinutes,
+				cancellationToken).ConfigureAwait(false));
+	}
+
 	public static async Task<object> BuildDailySummaryAsync(
 		[Description("Date as YYYY-MM-DD (e.g. 2026-04-12).")] DateOnly date,
 		DailySummaryOptions? options,
