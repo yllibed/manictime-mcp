@@ -61,8 +61,10 @@
 ### Canonical filename pattern
 
 ```text
-^(?<date>\d{4}-\d{2}-\d{2})_(?<time>\d{2}-\d{2}-\d{2})_(?<offset>[+-]\d{2}-\d{2})_(?<width>\d+)_(?<height>\d+)_(?<seq>\d+)_(?<monitor>\d+)(?<thumb>\.thumbnail)?\.jpg$
+^(?<date>\d{4}-\d{2}-\d{2})_(?<time>\d{2}-\d{2}-\d{2})_(?<offset>[+-]?\d{2}-\d{2})_(?<width>\d+)_(?<height>\d+)_(?<seq>\d+)_(?<monitor>\d+)(?<thumb>\.thumbnail)?\.jpg$
 ```
+
+Unsigned offsets are accepted for ManicTime files that omit the leading `+` on positive UTC offsets. The parser normalizes them to canonical `+HH-mm` form.
 
 ### Correlation model
 
