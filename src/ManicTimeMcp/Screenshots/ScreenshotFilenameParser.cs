@@ -7,6 +7,7 @@ namespace ManicTimeMcp.Screenshots;
 /// Expected pattern: {date}_{time}_{offset}_{width}_{height}_{seq}_{monitor}[.thumbnail].jpg
 /// Example: 2025-01-15_08-30-00_+02-00_1920_1080_0_0.jpg
 /// Example: 2025-01-15_08-30-00_+02-00_1920_1080_0_0.thumbnail.jpg
+/// Example: 2025-01-15_08-30-00_01-00_1920_1080_0_0.jpg  (unsigned offset, treated as positive)
 /// </summary>
 public static class ScreenshotFilenameParser
 {
@@ -97,21 +98,35 @@ public static class ScreenshotFilenameParser
 	private static bool TryParseOffsetSegment(ref ReadOnlySpan<char> remaining, out string offset)
 	{
 		offset = string.Empty;
-		if (remaining.Length < 7 || remaining[6] != '_')
+
+		var hasSign = remaining.Length > 0 && (remaining[0] == '+' || remaining[0] == '-');
+		var offsetLength = hasSign ? 6 : 5;
+		if (remaining.Length < offsetLength + 1 || remaining[offsetLength] != '_')
 		{
 			return false;
 		}
 
-		var offsetSpan = remaining[..6];
-		remaining = remaining[7..];
-
-		if ((offsetSpan[0] != '+' && offsetSpan[0] != '-') || offsetSpan[3] != '-')
+		var offsetSpan = remaining[..offsetLength];
+		remaining = remaining[(offsetLength + 1)..];
+		if (!IsValidOffset(offsetSpan, hasSign))
 		{
 			return false;
 		}
 
-		offset = offsetSpan.ToString();
+		offset = hasSign ? offsetSpan.ToString() : string.Concat("+", offsetSpan.ToString());
 		return true;
+	}
+
+	private static bool IsValidOffset(ReadOnlySpan<char> offset, bool hasSign)
+	{
+		var start = hasSign ? 1 : 0;
+		var separatorIndex = hasSign ? 3 : 2;
+		return offset.Length == (hasSign ? 6 : 5) &&
+			offset[separatorIndex] == '-' &&
+			char.IsDigit(offset[start]) &&
+			char.IsDigit(offset[start + 1]) &&
+			char.IsDigit(offset[separatorIndex + 1]) &&
+			char.IsDigit(offset[separatorIndex + 2]);
 	}
 
 	private static bool TryParseTime(ReadOnlySpan<char> span, out TimeOnly time)
