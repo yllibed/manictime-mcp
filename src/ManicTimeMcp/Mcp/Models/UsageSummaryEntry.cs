@@ -6,6 +6,9 @@ internal sealed class UsageSummaryEntry
 	/// <summary>Item name (application, domain, file path, or tag name).</summary>
 	public required string Name { get; init; }
 
+	/// <summary>Stable group key when available.</summary>
+	public string? Key { get; init; }
+
 	/// <summary>Group color when available.</summary>
 	public string? Color { get; init; }
 

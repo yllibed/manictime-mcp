@@ -251,26 +251,22 @@ public sealed class ActivityTools
 
 		var effectiveLimit = QueryLimits.Clamp(limit, QueryLimits.DefaultUsageLimit, QueryLimits.MaxDailyUsageRows);
 
-		var (appRaw, webRaw, docRaw, tagRaw, usageActivities) = await FetchUsageDataAsync(
-			startDate, startDay, endDay, type, effectiveLimit, cancellationToken).ConfigureAwait(false);
+		var (appRaw, webRaw, docRaw, tagRaw, usageActivities, activityFallback) = await FetchUsageDataAsync(
+			startDate, startDay, endDay, type, cancellationToken).ConfigureAwait(false);
 
 		return ToolResults.Success(JsonSerializer.Serialize(new
 		{
 			startDate,
 			endDate,
-			totalActiveMinutes = NarrativeTools.ComputeTotalActiveMinutes(usageActivities),
+			totalActiveMinutes = ComputeSummaryActiveMinutes(usageActivities, activityFallback),
 			applications = AggregateToSummary(appRaw, effectiveLimit),
-			websites = AggregateToSummary(webRaw, effectiveLimit, minMinutes),
+			websites = AggregateToSummary(
+				webRaw.Where(static web => NarrativeTools.IsValidWebsiteName(web.Name)).ToList(),
+				effectiveLimit,
+				minMinutes),
 			documents = AggregateToSummary(docRaw, effectiveLimit),
 			tags = AggregateToSummary(tagRaw, effectiveLimit),
-			diagnostics = !_capabilities.HasPreAggregatedAppUsage && !_capabilities.HasPreAggregatedWebUsage
-				? new DiagnosticsInfo
-				{
-					Degraded = true,
-					ReasonCode = "FallbackComputation",
-					RemediationHint = "Pre-aggregated tables not found. Results computed from raw activities.",
-				}
-				: DiagnosticsInfo.Ok,
+			diagnostics = BuildUsageSummaryDiagnostics(type),
 		}, JsonOptions.Default));
 	}
 
@@ -279,34 +275,42 @@ public sealed class ActivityTools
 		IReadOnlyList<Database.Dto.DailyUsageDto> Web,
 		IReadOnlyList<Database.Dto.DailyUsageDto> Docs,
 		IReadOnlyList<Database.Dto.DailyUsageDto> Tags,
-		IReadOnlyList<Database.Dto.ActivityDto> Usage)> FetchUsageDataAsync(
-		string startDate, string startDay, string endDay, string type, int effectiveLimit, CancellationToken ct)
+		IReadOnlyList<Database.Dto.ActivityDto> Usage,
+		IReadOnlyList<Database.Dto.ActivityDto> ActivityFallback)> FetchUsageDataAsync(
+		string startDate, string startDay, string endDay, string type, CancellationToken ct)
 	{
 		var includeAll = string.Equals(type, "all", StringComparison.OrdinalIgnoreCase);
 		var empty = Task.FromResult<IReadOnlyList<Database.Dto.DailyUsageDto>>([]);
+		var fetchLimit = QueryLimits.MaxDailyUsageRows;
 
 		var appTask = includeAll || string.Equals(type, "applications", StringComparison.OrdinalIgnoreCase)
-			? _usageRepository.GetDailyAppUsageAsync(startDay, endDay, effectiveLimit, ct) : empty;
+			? _usageRepository.GetDailyAppUsageAsync(startDay, endDay, fetchLimit, ct) : empty;
 		var webTask = includeAll || string.Equals(type, "websites", StringComparison.OrdinalIgnoreCase)
-			? _usageRepository.GetDailyWebUsageAsync(startDay, endDay, effectiveLimit, ct) : empty;
+			? _usageRepository.GetDailyWebUsageAsync(startDay, endDay, fetchLimit, ct) : empty;
 		var docTask = includeAll || string.Equals(type, "documents", StringComparison.OrdinalIgnoreCase)
-			? _usageRepository.GetDailyDocUsageAsync(startDay, endDay, effectiveLimit, ct) : empty;
+			? _usageRepository.GetDailyDocUsageAsync(startDay, endDay, fetchLimit, ct) : empty;
 		var tagTask = includeAll || string.Equals(type, "tags", StringComparison.OrdinalIgnoreCase)
-			? _usageRepository.GetDailyTagUsageAsync(startDay, endDay, effectiveLimit, ct) : empty;
+			? _usageRepository.GetDailyTagUsageAsync(startDay, endDay, fetchLimit, ct) : empty;
 
-		var usageTask = FetchComputerUsageActivitiesAsync(startDate, startDay, endDay, ct);
+		var usageTask = FetchComputerUsageActivitiesAsync(startDate, endDay, ct);
 
 		await Task.WhenAll(appTask, webTask, docTask, tagTask, usageTask).ConfigureAwait(false);
+		var usage = await usageTask.ConfigureAwait(false);
+		var activityFallback = usage.Count == 0
+			? await FetchApplicationActivitiesAsync(startDate, endDay, ct).ConfigureAwait(false)
+			: [];
+
 		return (
 			await appTask.ConfigureAwait(false),
 			await webTask.ConfigureAwait(false),
 			await docTask.ConfigureAwait(false),
 			await tagTask.ConfigureAwait(false),
-			await usageTask.ConfigureAwait(false));
+			usage,
+			activityFallback);
 	}
 
 	private async Task<IReadOnlyList<Database.Dto.ActivityDto>> FetchComputerUsageActivitiesAsync(
-		string startDate, string startDay, string endDay, CancellationToken ct)
+		string startDate, string endDay, CancellationToken ct)
 	{
 		var (startLocal, endLocal) = ParseDateRange(startDate, endDay);
 		var timelines = await _timelineRepository.GetTimelinesAsync(ct).ConfigureAwait(false);
@@ -323,14 +327,33 @@ public sealed class ActivityTools
 			usageTimeline.ReportId, startLocal, endLocal, QueryLimits.MaxActivities, ct).ConfigureAwait(false);
 	}
 
+	private async Task<IReadOnlyList<Database.Dto.ActivityDto>> FetchApplicationActivitiesAsync(
+		string startDate, string endDay, CancellationToken ct)
+	{
+		var (startLocal, endLocal) = ParseDateRange(startDate, endDay);
+		var timelines = await _timelineRepository.GetTimelinesAsync(ct).ConfigureAwait(false);
+		var appTimeline = timelines.FirstOrDefault(t =>
+			t.SchemaName.Equals("ManicTime/Applications", StringComparison.OrdinalIgnoreCase) ||
+			t.BaseSchemaName.Equals("ManicTime/Applications", StringComparison.OrdinalIgnoreCase));
+
+		if (appTimeline is null)
+		{
+			return [];
+		}
+
+		return await _activityRepository.GetActivitiesAsync(
+			appTimeline.ReportId, startLocal, endLocal, QueryLimits.MaxActivities, ct).ConfigureAwait(false);
+	}
+
 	private static List<UsageSummaryEntry> AggregateToSummary(
 		IReadOnlyList<Database.Dto.DailyUsageDto> dailyUsage, int limit, double minMinutes = 0)
 	{
 		return dailyUsage
-			.GroupBy(d => d.Name, StringComparer.Ordinal)
+			.GroupBy(d => new { d.Name, d.Key })
 			.Select(g => new UsageSummaryEntry
 			{
-				Name = g.Key,
+				Name = g.Key.Name,
+				Key = g.Key.Key,
 				Color = g.First().Color,
 				TotalMinutes = Math.Round(g.Sum(x => x.TotalSeconds) / 60.0, digits: 1),
 			})
@@ -338,6 +361,42 @@ public sealed class ActivityTools
 			.OrderByDescending(e => e.TotalMinutes)
 			.Take(limit)
 			.ToList();
+	}
+
+	private static double ComputeSummaryActiveMinutes(
+		IReadOnlyList<Database.Dto.ActivityDto> usageActivities,
+		IReadOnlyList<Database.Dto.ActivityDto> activityFallback)
+	{
+		if (usageActivities.Count > 0)
+		{
+			return NarrativeTools.ComputeTotalActiveMinutes(usageActivities);
+		}
+
+		return Math.Round(activityFallback.Sum(activity =>
+		{
+			var start = DateTime.ParseExact(activity.StartLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+			var end = DateTime.ParseExact(activity.EndLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+			return (end - start).TotalMinutes;
+		}), digits: 1);
+	}
+
+	private DiagnosticsInfo BuildUsageSummaryDiagnostics(string type)
+	{
+		var includeAll = string.Equals(type, "all", StringComparison.OrdinalIgnoreCase);
+		var degraded =
+			(includeAll || string.Equals(type, "applications", StringComparison.OrdinalIgnoreCase)) && !_capabilities.HasPreAggregatedAppUsage
+			|| (includeAll || string.Equals(type, "websites", StringComparison.OrdinalIgnoreCase)) && !_capabilities.HasPreAggregatedWebUsage
+			|| (includeAll || string.Equals(type, "documents", StringComparison.OrdinalIgnoreCase)) && !_capabilities.HasPreAggregatedDocUsage
+			|| (includeAll || string.Equals(type, "tags", StringComparison.OrdinalIgnoreCase)) && !_capabilities.HasTags;
+
+		return degraded
+			? new DiagnosticsInfo
+			{
+				Degraded = true,
+				ReasonCode = "FallbackComputation",
+				RemediationHint = "Some requested pre-aggregated tables are unavailable. Results may be computed from raw activities or omitted when no fallback exists.",
+			}
+			: DiagnosticsInfo.Ok;
 	}
 
 	private static bool IsValidUsageSummaryType(string type) =>

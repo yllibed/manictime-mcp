@@ -216,6 +216,14 @@ public sealed class SchemaValidatorTests
 			i.Message.Contains("Ar_CommonGroup"));
 	}
 
+	[TestMethod]
+	public void CapabilityMatrix_TagsRequireCommonGroup()
+	{
+		var matrix = new QueryCapabilityMatrix(["Ar_TagListByDay"]);
+
+		matrix.HasTags.Should().BeFalse();
+	}
+
 	#endregion
 
 	#region Capability matrix

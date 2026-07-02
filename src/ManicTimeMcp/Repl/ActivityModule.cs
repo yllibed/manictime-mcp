@@ -10,6 +10,7 @@ internal sealed class ActivityModule : IReplModule
 		{
 			MapList(activity);
 			MapComputerUsage(activity);
+			MapTags(activity);
 		});
 	}
 
@@ -34,4 +35,13 @@ internal sealed class ActivityModule : IReplModule
 			.ReadOnly();
 	}
 
+	private static void MapTags(IReplMap activity)
+	{
+		activity.Map("tags", ManicTimeReplHandlers.ListTagsAsync)
+			.WithDescription("List tag activities for a date range.")
+			.WithDetails(
+				"Returns user-defined ManicTime tag intervals from the raw Tags timeline. " +
+				"Use usage summary with type tags for daily aggregate totals.")
+			.ReadOnly();
+	}
 }
