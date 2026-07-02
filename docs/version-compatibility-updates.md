@@ -27,19 +27,26 @@ If `HKLM:\SOFTWARE\FinKit\ManicTime` is unavailable, find `ManicTime.exe` manual
 
 ## 2. Snapshot The Local Database
 
-Copy the current databases into a versioned local snapshot:
+Copy the current databases and SQLite sidecars into a versioned local snapshot:
 
 ```powershell
 $snapshot = Join-Path (Get-Location) ".database\$version"
 New-Item -ItemType Directory -Path $snapshot -Force | Out-Null
 
-Copy-Item -LiteralPath (Join-Path $dataDir "ManicTimeReports.db") -Destination (Join-Path $snapshot "ManicTimeReports.db") -Force
-Copy-Item -LiteralPath (Join-Path $dataDir "ManicTimeCore.db") -Destination (Join-Path $snapshot "ManicTimeCore.db") -Force
+foreach ($name in @("ManicTimeReports.db", "ManicTimeCore.db")) {
+    foreach ($suffix in @("", "-wal", "-shm")) {
+        $source = Join-Path $dataDir "$name$suffix"
+        if (Test-Path -LiteralPath $source) {
+            Copy-Item -LiteralPath $source -Destination (Join-Path $snapshot "$name$suffix") -Force
+        }
+    }
+}
 
 Get-ChildItem -File $snapshot | Select-Object FullName,Length,LastWriteTime
 ```
 
 Only `ManicTimeReports.db` is required by the MCP server. `ManicTimeCore.db` is copied as supporting evidence for local investigation.
+If ManicTime is actively writing to the databases, close ManicTime first or use a SQLite backup workflow before copying so the snapshot is internally consistent.
 
 ## 3. Run Compatibility Smoke Checks
 
@@ -61,9 +68,9 @@ dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- resource data-range
 Run at least one query from each major surface using dates that exist in `resource data-range`:
 
 ```powershell
-dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- usage summary --period 2026-07-01..2026-07-02 --type applications --output:json
-dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- usage summary --period 2026-07-01..2026-07-02 --type documents --output:json
-dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- usage summary --period 2026-07-01..2026-07-02 --type websites --output:json
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- usage applications --period 2026-07-01..2026-07-02 --output:json
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- usage documents --period 2026-07-01..2026-07-02 --output:json
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- usage websites --period 2026-07-01..2026-07-02 --output:json
 dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- summary daily 2026-07-01 --output:json
 dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- summary narrative --period 2026-07-01..2026-07-02 --output:json
 dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- screenshot list --window 2026-07-01T09:00:00..2026-07-01T10:00:00 --output:json
