@@ -7,6 +7,7 @@ internal sealed class StubUsageRepository(
 	IReadOnlyList<DailyUsageDto>? dailyApp = null,
 	IReadOnlyList<DailyUsageDto>? dailyWeb = null,
 	IReadOnlyList<DailyUsageDto>? dailyDoc = null,
+	IReadOnlyList<DailyUsageDto>? dailyTag = null,
 	IReadOnlyList<HourlyUsageDto>? hourlyApp = null,
 	IReadOnlyList<HourlyUsageDto>? hourlyWeb = null,
 	IReadOnlyList<TimelineSummaryDto>? summaries = null) : IUsageRepository
@@ -30,6 +31,10 @@ internal sealed class StubUsageRepository(
 	public Task<IReadOnlyList<DailyUsageDto>> GetDailyDocUsageAsync(
 		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default) =>
 		Task.FromResult<IReadOnlyList<DailyUsageDto>>(dailyDoc ?? []);
+
+	public Task<IReadOnlyList<DailyUsageDto>> GetDailyTagUsageAsync(
+		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default) =>
+		Task.FromResult<IReadOnlyList<DailyUsageDto>>(dailyTag ?? []);
 
 	public Task<IReadOnlyList<DayOfWeekUsageDto>> GetDayOfWeekAppUsageAsync(
 		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default) =>

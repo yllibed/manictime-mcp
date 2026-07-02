@@ -54,62 +54,19 @@ internal static class ManicTimeReplHandlers
 				cancellationToken).ConfigureAwait(false));
 	}
 
-	public static async Task<object> ListTagsAsync(
+
+	public static async Task<object> ListUsageSummaryAsync(
 		[Description("Date range as YYYY-MM-DD..YYYY-MM-DD (e.g. 2026-04-01..2026-04-07).")] ReplDateRange period,
-		LimitOptions? options,
+		UsageSummaryOptions? options,
 		[FromServices] ActivityTools tools,
 		CancellationToken cancellationToken)
 	{
-		options ??= new LimitOptions();
+		options ??= new UsageSummaryOptions();
 		return ReplToolResultAdapter.FromToolResult(
-			await tools.GetTagsAsync(
+			await tools.GetUsageSummaryAsync(
 				ToDateLiteral(period.From),
 				ToDateLiteral(period.To),
-				options.Limit,
-				cancellationToken).ConfigureAwait(false));
-	}
-
-	public static async Task<object> ListApplicationUsageAsync(
-		[Description("Date range as YYYY-MM-DD..YYYY-MM-DD (e.g. 2026-04-01..2026-04-07).")] ReplDateRange period,
-		LimitOptions? options,
-		[FromServices] ActivityTools tools,
-		CancellationToken cancellationToken)
-	{
-		options ??= new LimitOptions();
-		return ReplToolResultAdapter.FromToolResult(
-			await tools.GetApplicationUsageAsync(
-				ToDateLiteral(period.From),
-				ToDateLiteral(period.To),
-				options.Limit,
-				cancellationToken).ConfigureAwait(false));
-	}
-
-	public static async Task<object> ListDocumentUsageAsync(
-		[Description("Date range as YYYY-MM-DD..YYYY-MM-DD (e.g. 2026-04-01..2026-04-07).")] ReplDateRange period,
-		LimitOptions? options,
-		[FromServices] ActivityTools tools,
-		CancellationToken cancellationToken)
-	{
-		options ??= new LimitOptions();
-		return ReplToolResultAdapter.FromToolResult(
-			await tools.GetDocumentUsageAsync(
-				ToDateLiteral(period.From),
-				ToDateLiteral(period.To),
-				options.Limit,
-				cancellationToken).ConfigureAwait(false));
-	}
-
-	public static async Task<object> ListWebsiteUsageAsync(
-		[Description("Date range as YYYY-MM-DD..YYYY-MM-DD (e.g. 2026-04-01..2026-04-07).")] ReplDateRange period,
-		WebsiteUsageOptions? options,
-		[FromServices] NarrativeTools tools,
-		CancellationToken cancellationToken)
-	{
-		options ??= new WebsiteUsageOptions();
-		return ReplToolResultAdapter.FromToolResult(
-			await tools.GetWebsiteUsageAsync(
-				ToDateLiteral(period.From),
-				ToDateLiteral(period.To),
+				options.Type,
 				options.Limit,
 				options.MinMinutes,
 				cancellationToken).ConfigureAwait(false));

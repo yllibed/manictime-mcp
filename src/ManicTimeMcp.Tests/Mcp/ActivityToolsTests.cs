@@ -21,7 +21,7 @@ public sealed class ActivityToolsTests
 	[
 		new() { ActivityId = 1, ReportId = 1, StartLocalTime = "2025-01-15 08:00:00", EndLocalTime = "2025-01-15 09:00:00", Name = "VS Code", GroupId = null },
 		new() { ActivityId = 2, ReportId = 1, StartLocalTime = "2025-01-15 09:00:00", EndLocalTime = "2025-01-15 10:00:00", Name = "Chrome", GroupId = null },
-		new() { ActivityId = 3, ReportId = 2, StartLocalTime = "2025-01-15 08:00:00", EndLocalTime = "2025-01-15 12:00:00", Name = "On", GroupId = null },
+		new() { ActivityId = 3, ReportId = 2, StartLocalTime = "2025-01-15 08:00:00", EndLocalTime = "2025-01-15 12:00:00", Name = "Active", GroupId = null },
 	];
 
 	private static readonly DailyUsageDto[] SampleDailyAppUsage =
@@ -32,12 +32,18 @@ public sealed class ActivityToolsTests
 
 	private static ActivityTools CreateTools(
 		IReadOnlyList<DailyUsageDto>? dailyAppUsage = null,
+		IReadOnlyList<DailyUsageDto>? dailyWebUsage = null,
 		IReadOnlyList<DailyUsageDto>? dailyDocUsage = null,
+		IReadOnlyList<DailyUsageDto>? dailyTagUsage = null,
 		QueryCapabilityMatrix? capabilities = null) =>
 		new(
 			new StubActivityRepository(SampleActivities),
 			new StubTimelineRepository(SampleTimelines),
-			new StubUsageRepository(dailyApp: dailyAppUsage ?? SampleDailyAppUsage, dailyDoc: dailyDocUsage),
+			new StubUsageRepository(
+				dailyApp: dailyAppUsage ?? SampleDailyAppUsage,
+				dailyWeb: dailyWebUsage,
+				dailyDoc: dailyDocUsage,
+				dailyTag: dailyTagUsage),
 			capabilities ?? CreateFullCapabilities());
 
 	[TestMethod]
@@ -112,6 +118,62 @@ public sealed class ActivityToolsTests
 
 		var doc = result.ParsePayload();
 		doc.RootElement.GetProperty("usage")[0].GetProperty("totalMinutes").GetDouble().Should().Be(1.5);
+	}
+
+	[TestMethod]
+	public async Task GetUsageSummaryAsync_ReturnsConsolidatedSectionsAndActiveMinutes()
+	{
+		var tools = CreateTools(
+			dailyWebUsage:
+			[
+				new DailyUsageDto { Day = "2025-01-15", Name = "github.com", TotalSeconds = 120 },
+				new DailyUsageDto { Day = "2025-01-15", Name = "noise.example", TotalSeconds = 12 },
+			],
+			dailyDocUsage:
+			[
+				new DailyUsageDto { Day = "2025-01-15", Name = "Program.cs", TotalSeconds = 90 },
+			],
+			dailyTagUsage:
+			[
+				new DailyUsageDto { Day = "2025-01-15", Name = "Project A", TotalSeconds = 300 },
+			]);
+
+		var result = await tools.GetUsageSummaryAsync("2025-01-15", "2025-01-16", minMinutes: 0.5, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+
+		var doc = result.ParsePayload();
+		doc.RootElement.GetProperty("totalActiveMinutes").GetDouble().Should().Be(240);
+		doc.RootElement.GetProperty("applications").GetArrayLength().Should().Be(2);
+		doc.RootElement.GetProperty("websites").GetArrayLength().Should().Be(1);
+		doc.RootElement.GetProperty("documents").GetArrayLength().Should().Be(1);
+		doc.RootElement.GetProperty("tags").GetArrayLength().Should().Be(1);
+	}
+
+	[TestMethod]
+	public async Task GetUsageSummaryAsync_TypeFilter_ReturnsOnlyRequestedSection()
+	{
+		var tools = CreateTools(dailyWebUsage:
+		[
+			new DailyUsageDto { Day = "2025-01-15", Name = "github.com", TotalSeconds = 120 },
+		]);
+
+		var result = await tools.GetUsageSummaryAsync("2025-01-15", "2025-01-16", type: "websites", cancellationToken: CancellationToken.None).ConfigureAwait(false);
+
+		var doc = result.ParsePayload();
+		doc.RootElement.GetProperty("applications").GetArrayLength().Should().Be(0);
+		doc.RootElement.GetProperty("websites").GetArrayLength().Should().Be(1);
+		doc.RootElement.GetProperty("documents").GetArrayLength().Should().Be(0);
+		doc.RootElement.GetProperty("tags").GetArrayLength().Should().Be(0);
+	}
+
+	[TestMethod]
+	public async Task GetUsageSummaryAsync_InvalidType_ReturnsError()
+	{
+		var tools = CreateTools();
+
+		var result = await tools.GetUsageSummaryAsync("2025-01-15", "2025-01-16", type: "nonsense", cancellationToken: CancellationToken.None).ConfigureAwait(false);
+
+		result.IsError.Should().BeTrue();
+		result.ErrorCode.Should().Be("invalid_usage_type");
 	}
 
 	private static QueryCapabilityMatrix CreateFullCapabilities() =>

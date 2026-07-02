@@ -17,7 +17,7 @@ public sealed class ManicTimeReplMcpIntegrationTests
 
 		names.Should().Contain("timeline_list");
 		names.Should().Contain("activity_list");
-		names.Should().Contain("usage_applications");
+		names.Should().Contain("usage_summary");
 		names.Should().Contain("summary_daily");
 		names.Should().Contain("screenshot_list");
 		names.Should().Contain("screenshot_save");

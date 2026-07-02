@@ -50,7 +50,7 @@ Use CLI mode when you want to run one command directly from the same Repl graph.
 
 ```bash
 dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- timeline list --output:json
-dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- usage applications --period 2026-03-20..2026-03-21 --output:json
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- usage summary --period 2026-03-20..2026-03-21 --type applications --output:json
 dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- resource health --output:json
 ```
 
