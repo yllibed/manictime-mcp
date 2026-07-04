@@ -23,6 +23,29 @@ public sealed class UsageRepositoryFallbackTests
 	}
 
 	[TestMethod]
+	public async Task GetTotalAppUsageSecondsAsync_Fallback_ComputesUncappedTotalFromActivity()
+	{
+		using var fixture = FixtureDatabase.CreateCoreOnly(FixtureSeeder.SeedStandardData);
+		var sut = CreateDegradedRepository(fixture);
+
+		var totalSeconds = await sut.GetTotalAppUsageSecondsAsync("2025-01-15", "2025-01-16").ConfigureAwait(false);
+
+		// Application activities: 2h + 1.5h + 0.5h + 4.5h.
+		totalSeconds.Should().BeApproximately(30600, 1.0);
+	}
+
+	[TestMethod]
+	public async Task GetTotalAppUsageSecondsAsync_Fallback_ClipsToRequestedWindow()
+	{
+		using var fixture = FixtureDatabase.CreateCoreOnly(FixtureSeeder.SeedCrossMidnightData);
+		var sut = CreateDegradedRepository(fixture);
+
+		var totalSeconds = await sut.GetTotalAppUsageSecondsAsync("2025-01-16", "2025-01-17").ConfigureAwait(false);
+
+		totalSeconds.Should().BeApproximately(1800, 1.0);
+	}
+
+	[TestMethod]
 	public async Task GetHourlyAppUsageAsync_Fallback_ComputesFromActivity()
 	{
 		using var fixture = FixtureDatabase.CreateCoreOnly(FixtureSeeder.SeedStandardData);

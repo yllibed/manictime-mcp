@@ -32,6 +32,7 @@ public sealed class ActivityToolsTests
 
 	private static ActivityTools CreateTools(
 		IReadOnlyList<DailyUsageDto>? dailyAppUsage = null,
+		double? totalAppSeconds = null,
 		IReadOnlyList<DailyUsageDto>? dailyWebUsage = null,
 		IReadOnlyList<DailyUsageDto>? dailyDocUsage = null,
 		IReadOnlyList<DailyUsageDto>? dailyTagUsage = null,
@@ -43,6 +44,7 @@ public sealed class ActivityToolsTests
 			new StubTimelineRepository(timelines ?? SampleTimelines),
 			new StubUsageRepository(
 				dailyApp: dailyAppUsage ?? SampleDailyAppUsage,
+				totalAppSeconds: totalAppSeconds,
 				dailyWeb: dailyWebUsage,
 				dailyDoc: dailyDocUsage,
 				dailyTag: dailyTagUsage),
@@ -220,8 +222,17 @@ public sealed class ActivityToolsTests
 	}
 
 	[TestMethod]
-	public async Task GetUsageSummaryAsync_UsesDailyApplicationTotalsForComputerUsageFallback()
+	public async Task GetUsageSummaryAsync_UsesUncappedDailyApplicationTotalForComputerUsageFallback()
 	{
+		var cappedDisplayUsage = Enumerable.Range(0, QueryLimits.MaxDailyUsageRows)
+			.Select(index => new DailyUsageDto
+			{
+				Day = "2025-01-15",
+				Name = $"App {index}",
+				Key = $"app-{index}.exe",
+				TotalSeconds = 60,
+			})
+			.ToList();
 		var activities = Enumerable.Range(0, QueryLimits.MaxActivities + 1)
 			.Select(index =>
 			{
@@ -238,16 +249,8 @@ public sealed class ActivityToolsTests
 			})
 			.ToList();
 		var tools = CreateTools(
-			dailyAppUsage:
-			[
-				new DailyUsageDto
-				{
-					Day = "2025-01-15",
-					Name = "VS Code",
-					Key = "code.exe",
-					TotalSeconds = (QueryLimits.MaxActivities + 1) * 60,
-				},
-			],
+			dailyAppUsage: cappedDisplayUsage,
+			totalAppSeconds: (QueryLimits.MaxActivities + 1) * 60,
 			timelines:
 			[
 				new() { ReportId = 1, SchemaName = "ManicTime/Applications", BaseSchemaName = "ManicTime/Applications" },

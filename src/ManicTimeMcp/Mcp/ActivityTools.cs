@@ -252,14 +252,14 @@ public sealed class ActivityTools
 
 		var effectiveLimit = QueryLimits.Clamp(limit, QueryLimits.DefaultUsageLimit, QueryLimits.MaxDailyUsageRows);
 
-		var (appRaw, webRaw, docRaw, tagRaw, usageActivities, appUsageFallback) = await FetchUsageDataAsync(
+		var (appRaw, webRaw, docRaw, tagRaw, usageActivities, appUsageFallbackSeconds) = await FetchUsageDataAsync(
 			startLocal, endLocal, startDay, endDay, type, cancellationToken).ConfigureAwait(false);
 
 		return ToolResults.Success(JsonSerializer.Serialize(new
 		{
 			startDate,
 			endDate,
-			totalActiveMinutes = ComputeSummaryActiveMinutes(usageActivities, appUsageFallback, startLocal, endLocal),
+			totalActiveMinutes = ComputeSummaryActiveMinutes(usageActivities, appUsageFallbackSeconds, startLocal, endLocal),
 			applications = AggregateToSummary(appRaw, effectiveLimit),
 			websites = AggregateToSummary(
 				webRaw.Where(static web => NarrativeTools.IsValidWebsiteName(web.Name)).ToList(),
@@ -277,7 +277,7 @@ public sealed class ActivityTools
 		IReadOnlyList<Database.Dto.DailyUsageDto> Docs,
 		IReadOnlyList<Database.Dto.DailyUsageDto> Tags,
 		IReadOnlyList<Database.Dto.ActivityDto> Usage,
-		IReadOnlyList<Database.Dto.DailyUsageDto> AppUsageFallback)> FetchUsageDataAsync(
+		double AppUsageFallbackSeconds)> FetchUsageDataAsync(
 		string startLocal, string endLocal, string startDay, string endDay, string type, CancellationToken ct)
 	{
 		var includeAll = string.Equals(type, "all", StringComparison.OrdinalIgnoreCase);
@@ -299,11 +299,9 @@ public sealed class ActivityTools
 		await Task.WhenAll(appTask, webTask, docTask, tagTask, usageTask).ConfigureAwait(false);
 		var apps = await appTask.ConfigureAwait(false);
 		var usage = await usageTask.ConfigureAwait(false);
-		var appUsageFallback = usage.Count == 0
-			? includeApplications
-				? apps
-				: await _usageRepository.GetDailyAppUsageAsync(startDay, endDay, fetchLimit, ct).ConfigureAwait(false)
-			: [];
+		var appUsageFallbackSeconds = usage.Count == 0
+			? await _usageRepository.GetTotalAppUsageSecondsAsync(startDay, endDay, ct).ConfigureAwait(false)
+			: 0;
 
 		return (
 			apps,
@@ -311,7 +309,7 @@ public sealed class ActivityTools
 			await docTask.ConfigureAwait(false),
 			await tagTask.ConfigureAwait(false),
 			usage,
-			appUsageFallback);
+			appUsageFallbackSeconds);
 	}
 
 	private async Task<IReadOnlyList<Database.Dto.ActivityDto>> FetchComputerUsageActivitiesAsync(
@@ -351,7 +349,7 @@ public sealed class ActivityTools
 
 	private static double ComputeSummaryActiveMinutes(
 		IReadOnlyList<Database.Dto.ActivityDto> usageActivities,
-		IReadOnlyList<Database.Dto.DailyUsageDto> appUsageFallback,
+		double appUsageFallbackSeconds,
 		string startLocal,
 		string endLocal)
 	{
@@ -373,7 +371,7 @@ public sealed class ActivityTools
 			return Math.Round(totalMinutes, digits: 1);
 		}
 
-		return Math.Round(appUsageFallback.Sum(usage => usage.TotalSeconds) / 60.0, digits: 1);
+		return Math.Round(appUsageFallbackSeconds / 60.0, digits: 1);
 	}
 
 	private static double ComputeClippedDurationMinutes(

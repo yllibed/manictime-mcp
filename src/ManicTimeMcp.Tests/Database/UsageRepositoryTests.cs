@@ -32,6 +32,33 @@ public sealed class UsageRepositoryTests
 	}
 
 	[TestMethod]
+	public async Task GetTotalAppUsageSecondsAsync_ReturnsUncappedSeededTotal()
+	{
+		using var fixture = FixtureDatabase.CreateFull(FixtureSeeder.SeedFullData);
+		var sut = CreateRepository(fixture);
+
+		var totalSeconds = await sut.GetTotalAppUsageSecondsAsync("2025-01-15", "2025-01-17").ConfigureAwait(false);
+
+		totalSeconds.Should().Be(18000);
+	}
+
+	[TestMethod]
+	public async Task GetTotalAppUsageSecondsAsync_IgnoresDailyDisplayLimit()
+	{
+		using var fixture = FixtureDatabase.CreateFull(SeedMoreThanDailyDisplayLimit);
+		var sut = CreateRepository(fixture);
+
+		var displayRows = await sut.GetDailyAppUsageAsync(
+			"2025-01-15",
+			"2025-01-16",
+			limit: QueryLimits.MaxDailyUsageRows).ConfigureAwait(false);
+		var totalSeconds = await sut.GetTotalAppUsageSecondsAsync("2025-01-15", "2025-01-16").ConfigureAwait(false);
+
+		displayRows.Count.Should().Be(QueryLimits.MaxDailyUsageRows);
+		totalSeconds.Should().Be(QueryLimits.MaxDailyUsageRows + 1);
+	}
+
+	[TestMethod]
 	public async Task GetDailyWebUsageAsync_ReturnsSeededData()
 	{
 		using var fixture = FixtureDatabase.CreateFull(FixtureSeeder.SeedFullData);
@@ -127,6 +154,35 @@ public sealed class UsageRepositoryTests
 		results[0].Name.Should().Be("Visual Studio");
 		results[0].DayOfWeek.Should().Be(3); // Wednesday
 		results[0].TotalSeconds.Should().Be(7200);
+	}
+
+	private static void SeedMoreThanDailyDisplayLimit(Microsoft.Data.Sqlite.SqliteConnection connection)
+	{
+		using var transaction = connection.BeginTransaction();
+		using var commonCommand = connection.CreateCommand();
+		commonCommand.Transaction = transaction;
+		commonCommand.CommandText = "INSERT INTO Ar_CommonGroup (CommonId, Name, Color, Key) VALUES (@id, @name, NULL, @key)";
+		var commonId = commonCommand.Parameters.Add("@id", Microsoft.Data.Sqlite.SqliteType.Integer);
+		var commonName = commonCommand.Parameters.Add("@name", Microsoft.Data.Sqlite.SqliteType.Text);
+		var commonKey = commonCommand.Parameters.Add("@key", Microsoft.Data.Sqlite.SqliteType.Text);
+
+		using var usageCommand = connection.CreateCommand();
+		usageCommand.Transaction = transaction;
+		usageCommand.CommandText = "INSERT INTO Ar_ApplicationByDay (Hour, CommonId, TotalSeconds) VALUES ('2025-01-15', @id, 1)";
+		var usageId = usageCommand.Parameters.Add("@id", Microsoft.Data.Sqlite.SqliteType.Integer);
+
+		for (var id = 1; id <= QueryLimits.MaxDailyUsageRows + 1; id++)
+		{
+			commonId.Value = id;
+			commonName.Value = $"App {id}";
+			commonKey.Value = $"app-{id}.exe";
+			commonCommand.ExecuteNonQuery();
+
+			usageId.Value = id;
+			usageCommand.ExecuteNonQuery();
+		}
+
+		transaction.Commit();
 	}
 
 	private static UsageRepository CreateRepository(FixtureDatabase fixture, bool fullCapabilities = true)

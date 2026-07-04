@@ -1,3 +1,4 @@
+using System.Globalization;
 using ManicTimeMcp.Database.Dto;
 using Microsoft.Extensions.Logging;
 
@@ -55,6 +56,13 @@ public sealed class UsageRepository : IUsageRepository
 		_capabilities.HasPreAggregatedAppUsage
 			? GetDailyUsageAsync("Ar_ApplicationByDay", startDay, endDay, limit, cancellationToken)
 			: GetDailyUsageFallbackAsync(["ManicTime/Applications"], startDay, endDay, limit, cancellationToken);
+
+	/// <inheritdoc />
+	public Task<double> GetTotalAppUsageSecondsAsync(
+		string startDay, string endDay, CancellationToken cancellationToken = default) =>
+		_capabilities.HasPreAggregatedAppUsage
+			? GetTotalUsageSecondsAsync("Ar_ApplicationByDay", startDay, endDay, cancellationToken)
+			: GetTotalUsageSecondsFallbackAsync(["ManicTime/Applications"], startDay, endDay, cancellationToken);
 
 	/// <inheritdoc />
 	public Task<IReadOnlyList<DailyUsageDto>> GetDailyWebUsageAsync(
@@ -169,6 +177,34 @@ public sealed class UsageRepository : IUsageRepository
 			cancellationToken);
 	}
 
+	private Task<double> GetTotalUsageSecondsAsync(
+		string tableName, string startDay, string endDay, CancellationToken cancellationToken)
+	{
+		var queryName = string.Concat("GetTotalUsageSeconds(", tableName, ")");
+
+		return SqliteRetryHelper.ExecuteWithRetryAsync(
+			_logger,
+			async ct =>
+			{
+				ct.ThrowIfCancellationRequested();
+
+				using var connection = _connectionFactory.CreateConnection();
+				using var command = connection.CreateCommand();
+				command.CommandText = $"""
+					SELECT COALESCE(SUM(TotalSeconds), 0)
+					FROM {tableName}
+					WHERE Hour >= @startDay AND Hour < @endDay
+					""";
+				command.Parameters.AddWithValue("@startDay", startDay);
+				command.Parameters.AddWithValue("@endDay", endDay);
+
+				var result = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+				_logger.QueryExecuted(queryName, 1);
+				return Convert.ToDouble(result, CultureInfo.InvariantCulture);
+			},
+			cancellationToken);
+	}
+
 	private Task<IReadOnlyList<DayOfWeekUsageDto>> GetDayOfWeekFromYearlyAsync(
 		string startDay, string endDay, int? limit, CancellationToken cancellationToken)
 	{
@@ -279,6 +315,46 @@ public sealed class UsageRepository : IUsageRepository
 				command.CommandText = BuildDailyFallbackSql(schemaFilter, groupType);
 				AddSchemaAndRangeParams(command, schemaParams, startDay, endDay, effectiveLimit, groupType);
 				return await ReadDailyResultsAsync(command, queryName, ct).ConfigureAwait(false);
+			},
+			cancellationToken);
+	}
+
+	private Task<double> GetTotalUsageSecondsFallbackAsync(
+		string[] schemaNames, string startDay, string endDay, CancellationToken cancellationToken)
+	{
+		const string queryName = "GetTotalUsageSeconds(Fallback:Applications)";
+		var (schemaFilter, schemaParams) = BuildSchemaFilter(schemaNames);
+
+		return SqliteRetryHelper.ExecuteWithRetryAsync(
+			_logger,
+			async ct =>
+			{
+				ct.ThrowIfCancellationRequested();
+				using var connection = _connectionFactory.CreateConnection();
+				using var command = connection.CreateCommand();
+				command.CommandText = $"""
+					SELECT COALESCE(SUM(
+					    (JULIANDAY(MIN(a.EndLocalTime, @endDay))
+					     - JULIANDAY(MAX(a.StartLocalTime, @startDay))) * 86400
+					), 0) AS TotalSeconds
+					FROM Ar_Activity a
+					WHERE a.ReportId IN (
+					    SELECT ReportId FROM Ar_Timeline
+					    WHERE {schemaFilter}
+					)
+					  AND a.EndLocalTime > @startDay
+					  AND a.StartLocalTime < @endDay
+					""";
+				foreach (var (name, value) in schemaParams)
+				{
+					command.Parameters.AddWithValue(name, value);
+				}
+				command.Parameters.AddWithValue("@startDay", startDay);
+				command.Parameters.AddWithValue("@endDay", endDay);
+
+				var result = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+				_logger.QueryExecuted(queryName, 1);
+				return Convert.ToDouble(result, CultureInfo.InvariantCulture);
 			},
 			cancellationToken);
 	}

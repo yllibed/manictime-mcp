@@ -17,6 +17,18 @@ public interface IUsageRepository
 	Task<IReadOnlyList<DailyUsageDto>> GetDailyAppUsageAsync(
 		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default);
 
+	/// <summary>Returns total application usage seconds for a date range; implementations should avoid display row caps.</summary>
+	async Task<double> GetTotalAppUsageSecondsAsync(
+		string startDay, string endDay, CancellationToken cancellationToken = default)
+	{
+		var usage = await GetDailyAppUsageAsync(
+			startDay,
+			endDay,
+			QueryLimits.MaxDailyUsageRows,
+			cancellationToken).ConfigureAwait(false);
+		return usage.Sum(row => row.TotalSeconds);
+	}
+
 	/// <summary>Returns daily website usage for a date range.</summary>
 	Task<IReadOnlyList<DailyUsageDto>> GetDailyWebUsageAsync(
 		string startDay, string endDay, int? limit = null, CancellationToken cancellationToken = default);
