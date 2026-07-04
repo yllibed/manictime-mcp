@@ -14,13 +14,13 @@ internal sealed class StubActivityRepository(
 		long timelineId, string startLocalTime, string endLocalTime, int? limit = null,
 		CancellationToken cancellationToken = default) =>
 		Task.FromResult<IReadOnlyList<ActivityDto>>(
-			_activities.Where(a => a.ReportId == timelineId).ToList());
+			_activities.Where(a => a.ReportId == timelineId).Take(limit ?? int.MaxValue).ToList());
 
 	public Task<IReadOnlyList<ActivityDto>> GetActivitiesWithGroupTypeAsync(
 		long timelineId, string startLocalTime, string endLocalTime, string groupType,
 		int? limit = null, CancellationToken cancellationToken = default) =>
 		Task.FromResult<IReadOnlyList<ActivityDto>>(
-			_activities.Where(a => a.ReportId == timelineId).ToList());
+			_activities.Where(a => a.ReportId == timelineId).Take(limit ?? int.MaxValue).ToList());
 
 	public Task<IReadOnlyList<EnrichedActivityDto>> GetEnrichedActivitiesAsync(
 		long timelineId, string startLocalTime, string endLocalTime, int? limit = null,

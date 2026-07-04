@@ -244,6 +244,7 @@ public sealed class ActivityTools
 		string startDate, string endDate, string type, int? limit, double minMinutes, CancellationToken cancellationToken)
 	{
 		var (startDay, endDay) = ParseDayRange(startDate, endDate);
+		var (startLocal, endLocal) = ParseDateRange(startDate, endDate);
 		if (!IsValidUsageSummaryType(type))
 		{
 			return ToolResults.Error("Invalid usage summary type. Expected one of: all, applications, websites, documents, tags.", "invalid_usage_type");
@@ -251,14 +252,14 @@ public sealed class ActivityTools
 
 		var effectiveLimit = QueryLimits.Clamp(limit, QueryLimits.DefaultUsageLimit, QueryLimits.MaxDailyUsageRows);
 
-		var (appRaw, webRaw, docRaw, tagRaw, usageActivities, activityFallback) = await FetchUsageDataAsync(
-			startDate, startDay, endDay, type, cancellationToken).ConfigureAwait(false);
+		var (appRaw, webRaw, docRaw, tagRaw, usageActivities, appUsageFallback) = await FetchUsageDataAsync(
+			startLocal, endLocal, startDay, endDay, type, cancellationToken).ConfigureAwait(false);
 
 		return ToolResults.Success(JsonSerializer.Serialize(new
 		{
 			startDate,
 			endDate,
-			totalActiveMinutes = ComputeSummaryActiveMinutes(usageActivities, activityFallback),
+			totalActiveMinutes = ComputeSummaryActiveMinutes(usageActivities, appUsageFallback, startLocal, endLocal),
 			applications = AggregateToSummary(appRaw, effectiveLimit),
 			websites = AggregateToSummary(
 				webRaw.Where(static web => NarrativeTools.IsValidWebsiteName(web.Name)).ToList(),
@@ -276,14 +277,15 @@ public sealed class ActivityTools
 		IReadOnlyList<Database.Dto.DailyUsageDto> Docs,
 		IReadOnlyList<Database.Dto.DailyUsageDto> Tags,
 		IReadOnlyList<Database.Dto.ActivityDto> Usage,
-		IReadOnlyList<Database.Dto.ActivityDto> ActivityFallback)> FetchUsageDataAsync(
-		string startDate, string startDay, string endDay, string type, CancellationToken ct)
+		IReadOnlyList<Database.Dto.DailyUsageDto> AppUsageFallback)> FetchUsageDataAsync(
+		string startLocal, string endLocal, string startDay, string endDay, string type, CancellationToken ct)
 	{
 		var includeAll = string.Equals(type, "all", StringComparison.OrdinalIgnoreCase);
 		var empty = Task.FromResult<IReadOnlyList<Database.Dto.DailyUsageDto>>([]);
 		var fetchLimit = QueryLimits.MaxDailyUsageRows;
+		var includeApplications = includeAll || string.Equals(type, "applications", StringComparison.OrdinalIgnoreCase);
 
-		var appTask = includeAll || string.Equals(type, "applications", StringComparison.OrdinalIgnoreCase)
+		var appTask = includeApplications
 			? _usageRepository.GetDailyAppUsageAsync(startDay, endDay, fetchLimit, ct) : empty;
 		var webTask = includeAll || string.Equals(type, "websites", StringComparison.OrdinalIgnoreCase)
 			? _usageRepository.GetDailyWebUsageAsync(startDay, endDay, fetchLimit, ct) : empty;
@@ -292,27 +294,29 @@ public sealed class ActivityTools
 		var tagTask = includeAll || string.Equals(type, "tags", StringComparison.OrdinalIgnoreCase)
 			? _usageRepository.GetDailyTagUsageAsync(startDay, endDay, fetchLimit, ct) : empty;
 
-		var usageTask = FetchComputerUsageActivitiesAsync(startDate, endDay, ct);
+		var usageTask = FetchComputerUsageActivitiesAsync(startLocal, endLocal, ct);
 
 		await Task.WhenAll(appTask, webTask, docTask, tagTask, usageTask).ConfigureAwait(false);
+		var apps = await appTask.ConfigureAwait(false);
 		var usage = await usageTask.ConfigureAwait(false);
-		var activityFallback = usage.Count == 0
-			? await FetchApplicationActivitiesAsync(startDate, endDay, ct).ConfigureAwait(false)
+		var appUsageFallback = usage.Count == 0
+			? includeApplications
+				? apps
+				: await _usageRepository.GetDailyAppUsageAsync(startDay, endDay, fetchLimit, ct).ConfigureAwait(false)
 			: [];
 
 		return (
-			await appTask.ConfigureAwait(false),
+			apps,
 			await webTask.ConfigureAwait(false),
 			await docTask.ConfigureAwait(false),
 			await tagTask.ConfigureAwait(false),
 			usage,
-			activityFallback);
+			appUsageFallback);
 	}
 
 	private async Task<IReadOnlyList<Database.Dto.ActivityDto>> FetchComputerUsageActivitiesAsync(
-		string startDate, string endDay, CancellationToken ct)
+		string startLocal, string endLocal, CancellationToken ct)
 	{
-		var (startLocal, endLocal) = ParseDateRange(startDate, endDay);
 		var timelines = await _timelineRepository.GetTimelinesAsync(ct).ConfigureAwait(false);
 		var usageTimeline = timelines.FirstOrDefault(t =>
 			t.SchemaName.Equals("ManicTime/ComputerUsage", StringComparison.OrdinalIgnoreCase) ||
@@ -325,24 +329,6 @@ public sealed class ActivityTools
 
 		return await _activityRepository.GetActivitiesAsync(
 			usageTimeline.ReportId, startLocal, endLocal, QueryLimits.MaxActivities, ct).ConfigureAwait(false);
-	}
-
-	private async Task<IReadOnlyList<Database.Dto.ActivityDto>> FetchApplicationActivitiesAsync(
-		string startDate, string endDay, CancellationToken ct)
-	{
-		var (startLocal, endLocal) = ParseDateRange(startDate, endDay);
-		var timelines = await _timelineRepository.GetTimelinesAsync(ct).ConfigureAwait(false);
-		var appTimeline = timelines.FirstOrDefault(t =>
-			t.SchemaName.Equals("ManicTime/Applications", StringComparison.OrdinalIgnoreCase) ||
-			t.BaseSchemaName.Equals("ManicTime/Applications", StringComparison.OrdinalIgnoreCase));
-
-		if (appTimeline is null)
-		{
-			return [];
-		}
-
-		return await _activityRepository.GetActivitiesAsync(
-			appTimeline.ReportId, startLocal, endLocal, QueryLimits.MaxActivities, ct).ConfigureAwait(false);
 	}
 
 	private static List<UsageSummaryEntry> AggregateToSummary(
@@ -365,20 +351,43 @@ public sealed class ActivityTools
 
 	private static double ComputeSummaryActiveMinutes(
 		IReadOnlyList<Database.Dto.ActivityDto> usageActivities,
-		IReadOnlyList<Database.Dto.ActivityDto> activityFallback)
+		IReadOnlyList<Database.Dto.DailyUsageDto> appUsageFallback,
+		string startLocal,
+		string endLocal)
 	{
 		if (usageActivities.Count > 0)
 		{
-			return NarrativeTools.ComputeTotalActiveMinutes(usageActivities);
+			var windowStart = ParseLocalDateTime(startLocal);
+			var windowEnd = ParseLocalDateTime(endLocal);
+			var totalMinutes = 0.0;
+			foreach (var usage in usageActivities)
+			{
+				if (!string.Equals(usage.Name, "Active", StringComparison.OrdinalIgnoreCase))
+				{
+					continue;
+				}
+
+				totalMinutes += ComputeClippedDurationMinutes(usage, windowStart, windowEnd);
+			}
+
+			return Math.Round(totalMinutes, digits: 1);
 		}
 
-		return Math.Round(activityFallback.Sum(activity =>
-		{
-			var start = DateTime.ParseExact(activity.StartLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-			var end = DateTime.ParseExact(activity.EndLocalTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-			return (end - start).TotalMinutes;
-		}), digits: 1);
+		return Math.Round(appUsageFallback.Sum(usage => usage.TotalSeconds) / 60.0, digits: 1);
 	}
+
+	private static double ComputeClippedDurationMinutes(
+		Database.Dto.ActivityDto activity, DateTime windowStart, DateTime windowEnd)
+	{
+		var start = ParseLocalDateTime(activity.StartLocalTime);
+		var end = ParseLocalDateTime(activity.EndLocalTime);
+		var clippedStart = start > windowStart ? start : windowStart;
+		var clippedEnd = end < windowEnd ? end : windowEnd;
+		return clippedEnd > clippedStart ? (clippedEnd - clippedStart).TotalMinutes : 0;
+	}
+
+	private static DateTime ParseLocalDateTime(string value) =>
+		DateTime.ParseExact(value, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
 	private DiagnosticsInfo BuildUsageSummaryDiagnostics(string type)
 	{
