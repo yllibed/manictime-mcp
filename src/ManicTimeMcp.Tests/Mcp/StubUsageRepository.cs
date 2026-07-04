@@ -5,6 +5,7 @@ namespace ManicTimeMcp.Tests.Mcp;
 
 internal sealed class StubUsageRepository(
 	IReadOnlyList<DailyUsageDto>? dailyApp = null,
+	double? totalAppSeconds = null,
 	IReadOnlyList<DailyUsageDto>? dailyWeb = null,
 	IReadOnlyList<DailyUsageDto>? dailyDoc = null,
 	IReadOnlyList<DailyUsageDto>? dailyTag = null,
@@ -13,6 +14,8 @@ internal sealed class StubUsageRepository(
 	IReadOnlyList<TimelineSummaryDto>? summaries = null) : IUsageRepository
 {
 	public int? LastDailyAppLimit { get; private set; }
+
+	public bool TotalAppUsageRequested { get; private set; }
 
 	public int? LastDailyWebLimit { get; private set; }
 
@@ -33,6 +36,13 @@ internal sealed class StubUsageRepository(
 	{
 		LastDailyAppLimit = limit;
 		return Task.FromResult<IReadOnlyList<DailyUsageDto>>(dailyApp ?? []);
+	}
+
+	public Task<double> GetTotalAppUsageSecondsAsync(
+		string startDay, string endDay, CancellationToken cancellationToken = default)
+	{
+		TotalAppUsageRequested = true;
+		return Task.FromResult(totalAppSeconds ?? (dailyApp?.Sum(usage => usage.TotalSeconds) ?? 0));
 	}
 
 	public Task<IReadOnlyList<DailyUsageDto>> GetDailyWebUsageAsync(

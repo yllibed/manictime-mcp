@@ -17,17 +17,27 @@ From the repository root:
 $installDir = (Get-ItemProperty -Path HKLM:\SOFTWARE\FinKit\ManicTime -ErrorAction Stop).InstallDir
 $exe = Join-Path $installDir "ManicTime.exe"
 $version = (Get-Item $exe).VersionInfo.ProductVersion
-$dataDir = Join-Path $env:LOCALAPPDATA "Finkit\ManicTime"
+$envDataDir = [Environment]::GetEnvironmentVariable("MANICTIME_DATA_DIR")
+$registryDataDir = (Get-ItemProperty -Path HKCU:\SOFTWARE\Finkit\ManicTime -Name DataDirectory -ErrorAction SilentlyContinue).DataDirectory
+
+if (-not [string]::IsNullOrWhiteSpace($envDataDir)) {
+    $dataDir = $envDataDir
+} elseif (-not [string]::IsNullOrWhiteSpace($registryDataDir)) {
+    $dataDir = $registryDataDir
+} else {
+    $dataDir = Join-Path $env:LOCALAPPDATA "Finkit\ManicTime"
+}
 
 $version
 $dataDir
 ```
 
 If `HKLM:\SOFTWARE\FinKit\ManicTime` is unavailable, find `ManicTime.exe` manually and use its `ProductVersion`.
+The data directory resolution mirrors the MCP server: `MANICTIME_DATA_DIR`, then HKCU `DataDirectory`, then the default LocalAppData path.
 
 ## 2. Snapshot The Local Database
 
-Copy the current databases and SQLite sidecars into a versioned local snapshot:
+Copy the current databases, SQLite sidecars, and screenshots into a versioned local snapshot:
 
 ```powershell
 $snapshot = Join-Path (Get-Location) ".database\$version"
@@ -42,10 +52,17 @@ foreach ($name in @("ManicTimeReports.db", "ManicTimeCore.db")) {
     }
 }
 
+$screenshots = Join-Path $dataDir "Screenshots"
+if (Test-Path -LiteralPath $screenshots) {
+    Copy-Item -LiteralPath $screenshots -Destination (Join-Path $snapshot "Screenshots") -Recurse -Force
+}
+
 Get-ChildItem -File $snapshot | Select-Object FullName,Length,LastWriteTime
+Get-ChildItem -Directory -Path $snapshot | Select-Object FullName,LastWriteTime
 ```
 
 Only `ManicTimeReports.db` is required by the MCP server. `ManicTimeCore.db` is copied as supporting evidence for local investigation.
+`Screenshots` is copied because screenshot tools resolve files relative to `MANICTIME_DATA_DIR`.
 If ManicTime is actively writing to the databases, close ManicTime first or use a SQLite backup workflow before copying so the snapshot is internally consistent.
 
 ## 3. Run Compatibility Smoke Checks
@@ -71,7 +88,7 @@ Run at least one query from each major surface using dates that exist in `resour
 dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- usage applications --period 2026-07-01..2026-07-02 --output:json
 dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- usage documents --period 2026-07-01..2026-07-02 --output:json
 dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- usage websites --period 2026-07-01..2026-07-02 --output:json
-dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- summary daily 2026-07-01 --output:json
+dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- summary daily --date 2026-07-01 --output:json
 dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- summary narrative --period 2026-07-01..2026-07-02 --output:json
 dotnet run --project src/ManicTimeMcp/ManicTimeMcp.csproj -- screenshot list --window 2026-07-01T09:00:00..2026-07-01T10:00:00 --output:json
 ```

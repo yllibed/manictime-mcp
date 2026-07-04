@@ -235,10 +235,10 @@ public sealed class NarrativeTools
 				return ([], ComputeTotalActiveMinutes(usageActivities), 0, false);
 			}
 
-			// Fallback: use app usage sum when no ComputerUsage timeline
-			var appUsage = await _usageRepository.GetDailyAppUsageAsync(
-				startDate, endDate, cancellationToken: ct).ConfigureAwait(false);
-			var total = Math.Round(appUsage.Sum(a => a.TotalSeconds) / 60.0, digits: 1);
+			// Fallback: use uncapped app usage total when no ComputerUsage timeline exists.
+			var totalSeconds = await _usageRepository.GetTotalAppUsageSecondsAsync(
+				startDate, endDate, ct).ConfigureAwait(false);
+			var total = Math.Round(totalSeconds / 60.0, digits: 1);
 			return ([], total, 0, false);
 		}
 

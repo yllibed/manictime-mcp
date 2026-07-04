@@ -32,6 +32,7 @@ public sealed class ActivityToolsTests
 
 	private static ActivityTools CreateTools(
 		IReadOnlyList<DailyUsageDto>? dailyAppUsage = null,
+		double? totalAppSeconds = null,
 		IReadOnlyList<DailyUsageDto>? dailyWebUsage = null,
 		IReadOnlyList<DailyUsageDto>? dailyDocUsage = null,
 		IReadOnlyList<DailyUsageDto>? dailyTagUsage = null,
@@ -43,6 +44,7 @@ public sealed class ActivityToolsTests
 			new StubTimelineRepository(timelines ?? SampleTimelines),
 			new StubUsageRepository(
 				dailyApp: dailyAppUsage ?? SampleDailyAppUsage,
+				totalAppSeconds: totalAppSeconds,
 				dailyWeb: dailyWebUsage,
 				dailyDoc: dailyDocUsage,
 				dailyTag: dailyTagUsage),
@@ -184,6 +186,11 @@ public sealed class ActivityToolsTests
 	public async Task GetUsageSummaryAsync_FallsBackToApplicationActivityWhenComputerUsageMissing()
 	{
 		var tools = CreateTools(
+			dailyAppUsage:
+			[
+				new DailyUsageDto { Day = "2025-01-15", Name = "VS Code", Key = "code.exe", TotalSeconds = 5400 },
+				new DailyUsageDto { Day = "2025-01-15", Name = "Chrome", Key = "chrome.exe", TotalSeconds = 1800 },
+			],
 			timelines:
 			[
 				new() { ReportId = 1, SchemaName = "ManicTime/Applications", BaseSchemaName = "ManicTime/Applications" },
@@ -198,6 +205,62 @@ public sealed class ActivityToolsTests
 
 		var doc = result.ParsePayload();
 		doc.RootElement.GetProperty("totalActiveMinutes").GetDouble().Should().Be(120);
+	}
+
+	[TestMethod]
+	public async Task GetUsageSummaryAsync_ClipsActiveMinutesToRequestedWindow()
+	{
+		var tools = CreateTools(activities:
+		[
+			new() { ActivityId = 1, ReportId = 2, StartLocalTime = "2025-01-14 23:30:00", EndLocalTime = "2025-01-15 00:30:00", Name = "Active", GroupId = null },
+		]);
+
+		var result = await tools.GetUsageSummaryAsync("2025-01-15", "2025-01-16", cancellationToken: CancellationToken.None).ConfigureAwait(false);
+
+		var doc = result.ParsePayload();
+		doc.RootElement.GetProperty("totalActiveMinutes").GetDouble().Should().Be(30);
+	}
+
+	[TestMethod]
+	public async Task GetUsageSummaryAsync_UsesUncappedDailyApplicationTotalForComputerUsageFallback()
+	{
+		var cappedDisplayUsage = Enumerable.Range(0, QueryLimits.MaxDailyUsageRows)
+			.Select(index => new DailyUsageDto
+			{
+				Day = "2025-01-15",
+				Name = $"App {index}",
+				Key = $"app-{index}.exe",
+				TotalSeconds = 60,
+			})
+			.ToList();
+		var activities = Enumerable.Range(0, QueryLimits.MaxActivities + 1)
+			.Select(index =>
+			{
+				var start = new DateTime(2025, 1, 15).AddMinutes(index);
+				return new ActivityDto
+				{
+					ActivityId = index + 1,
+					ReportId = 1,
+					StartLocalTime = start.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture),
+					EndLocalTime = start.AddMinutes(1).ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture),
+					Name = "VS Code",
+					GroupId = null,
+				};
+			})
+			.ToList();
+		var tools = CreateTools(
+			dailyAppUsage: cappedDisplayUsage,
+			totalAppSeconds: (QueryLimits.MaxActivities + 1) * 60,
+			timelines:
+			[
+				new() { ReportId = 1, SchemaName = "ManicTime/Applications", BaseSchemaName = "ManicTime/Applications" },
+			],
+			activities: activities);
+
+		var result = await tools.GetUsageSummaryAsync("2025-01-15", "2025-01-19", cancellationToken: CancellationToken.None).ConfigureAwait(false);
+
+		var doc = result.ParsePayload();
+		doc.RootElement.GetProperty("totalActiveMinutes").GetDouble().Should().Be(QueryLimits.MaxActivities + 1);
 	}
 
 	[TestMethod]
