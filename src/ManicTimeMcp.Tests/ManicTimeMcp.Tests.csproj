@@ -8,6 +8,10 @@
 	<ItemGroup>
 		<PackageReference Include="AwesomeAssertions" />
 		<PackageReference Include="Repl.Testing" />
+		<PackageReference Update="MSTest.TestFramework" VersionOverride="4.3.2" />
+		<PackageReference Update="MSTest.TestAdapter" VersionOverride="4.3.2" />
+		<PackageReference Update="Microsoft.Testing.Extensions.CodeCoverage" VersionOverride="18.9.0" />
+		<PackageReference Update="Microsoft.Testing.Extensions.TrxReport" VersionOverride="2.3.2" />
 	</ItemGroup>
 
 	<ItemGroup>
